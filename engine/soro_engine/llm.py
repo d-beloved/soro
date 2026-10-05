@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 
 from . import prompts
+from .amounts import reconcile_amount
 from .config import LLM_CTX, LLM_REPEAT_PENALTY, LLM_TEMPERATURE, Lang
 
 
@@ -36,9 +37,10 @@ class LLM:
     def route(self, text: str, lang: Lang, today: str) -> dict:
         raw = self.chat(prompts.route_messages(text, lang, today), schema=prompts.ROUTER_SCHEMA, max_tokens=200)
         try:
-            return json.loads(raw)
+            result = json.loads(raw)
         except json.JSONDecodeError:
             return {"intent": "unknown"}
+        return reconcile_amount(result, text)
 
     def adapt(self, tip: str, question: str, lang: Lang) -> str:
         return self.chat(prompts.adapt_messages(tip, question, lang), max_tokens=220)

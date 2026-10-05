@@ -48,7 +48,9 @@ Return ONE JSON object. Fields:
   summary_query (asks how much they sold/spent/profit/debts), loan_intake (wants a loan or credit),
   ask_question (any question about money, saving, pricing, debt, records, loans), greeting, help, unknown.
 - item, quantity, unit: the goods, e.g. item "rice", quantity 3, unit "bags".
-- amount_ngn: total amount in naira as a plain number. "5k" = 5000, "2.5m" = 2500000, "five thousand" = 5000.
+- amount_ngn: total amount in naira as a plain number. Copy digits exactly: "10,000" = 10000, "5k" = 5000, "2.5m" = 2500000.
+  Words: "five thousand" = 5000; Yoruba ẹgbẹ̀rún, Hausa dubu, Igbo puku = thousand, and the count comes after it
+  ("ẹgbẹ̀rún márùn-ún" = 5000, "dubu biyar" = 5000, "puku iri ise" = 50000).
 - counterparty: the other person in a debt, e.g. "Mama Chidi".
 - direction (log_debt only): owed_to_me or i_owe.
 - period (summary_query only): today, week or month.
@@ -68,6 +70,8 @@ FEW_SHOT: list[tuple[str, dict]] = [
      {"intent": "log_debt", "counterparty": "Alhaji", "amount_ngn": 20000, "direction": "i_owe"}),
     ("I get ten carton of Indomie remain",
      {"intent": "stock_update", "item": "Indomie", "quantity": 10, "unit": "cartons"}),
+    ("Iya Bisi still owe me 3k for pepper",
+     {"intent": "log_debt", "counterparty": "Iya Bisi", "amount_ngn": 3000, "direction": "owed_to_me"}),
     ("How much I don sell this week",
      {"intent": "summary_query", "period": "week"}),
     ("I need loan of 200k to buy more goods",
@@ -77,6 +81,11 @@ FEW_SHOT: list[tuple[str, dict]] = [
     # Yoruba (draft)
     ("Mo ta àpò ìrẹsì méjì ní 50,000 naira",
      {"intent": "log_sale", "item": "rice", "quantity": 2, "unit": "bags", "amount_ngn": 50000}),
+    ("Mo ta ata ní ẹgbẹ̀rún márùn-ún naira",
+     {"intent": "log_sale", "item": "pepper", "amount_ngn": 5000}),
+    # code-mixed: Yoruba/Hausa/Igbo sentence with English goods and digits
+    ("mo ra rice agolo kan 10,000",
+     {"intent": "log_expense", "item": "rice", "quantity": 1, "unit": "agolo", "amount_ngn": 10000}),
     ("Báwo ni mo ṣe lè fi owó pamọ́",
      {"intent": "ask_question", "topic": "savings", "question": "How can I save money?"}),
     # Hausa (draft)
@@ -84,9 +93,13 @@ FEW_SHOT: list[tuple[str, dict]] = [
      {"intent": "log_sale", "item": "rice", "quantity": 3, "unit": "bags", "amount_ngn": 75000}),
     ("Ina bin Musa bashin naira dubu biyar",
      {"intent": "log_debt", "counterparty": "Musa", "amount_ngn": 5000, "direction": "owed_to_me"}),
+    ("Na sayar da rice bags biyu 50k",
+     {"intent": "log_sale", "item": "rice", "quantity": 2, "unit": "bags", "amount_ngn": 50000}),
     # Igbo (draft)
     ("Erere m akpa osikapa abụọ, puku naira iri ise",
      {"intent": "log_sale", "item": "rice", "quantity": 2, "unit": "bags", "amount_ngn": 50000}),
+    ("Azụrụ m tomatoes basket otu 15,000",
+     {"intent": "log_expense", "item": "tomatoes", "quantity": 1, "unit": "basket", "amount_ngn": 15000}),
     ("Kedụ ka m ga-esi chekwaa ego",
      {"intent": "ask_question", "topic": "savings", "question": "How can I save money?"}),
     ("Good morning o",
