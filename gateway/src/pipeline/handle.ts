@@ -1,0 +1,198 @@
+import { LANGS, parseIntent, type Lang } from "../domain/intents.js";
+import { parseRef } from "../domain/ref.js";
+import { todayWAT } from "../domain/time.js";
+import { hashPhone } from "../lib/hash.js";
+import { LANGUAGE_PROMPT, LANGUAGE_ROWS, t } from "../locales/index.js";
+import type { InboundMessage } from "../whatsapp/types.js";
+import { applyCommerce } from "./commerce.js";
+import type { Ctx, Deps, Reply } from "./context.js";
+import { answerQuestion, autoTip } from "./tutor.js";
+
+/** What we learned about the inbound message, written back to its row (and so to the NAIC export). */
+interface Outcome {
+  intent?: string;
+  payload?: unknown;
+  transcript?: string;
+  audio_seconds?: number;
+}
+
+const COMMANDS: Record<string, "help" | "language" | "delete"> = {
+  HELP: "help",
+  MENU: "help",
+  LANGUAGE: "language",
+  LANG: "language",
+  DELETE: "delete",
+};
+
+export async function handleMessage(deps: Deps, msg: InboundMessage): Promise<void> {
+  const started = Date.now();
+  const now = deps.now?.() ?? new Date();
+  const ref = parseRef(msg.text?.body) ?? (msg.referral?.source_id ? `AD_${msg.referral.source_id}`.slice(0, 40) : null);
+  const user = await deps.repo.getOrCreateUser(hashPhone(msg.from, deps.phoneSalt), ref);
+
+  const messageId = await deps.repo.insertInbound({ wa_message_id: msg.id, user_id: user.id, type: msg.type, language: user.language });
+  if (!messageId) {
+    deps.log.info({ wa_message_id: msg.id }, "duplicate webhook delivery ignored");
+    return;
+  }
+  void deps.wa.markRead(msg.id);
+
+  const ctx: Ctx = { deps, msg, user, lang: user.language ?? "en", messageId, now };
+  const outcome: Outcome = {};
+  try {
+    await dispatch(ctx, outcome);
+    await deps.repo.updateMessage(messageId, { ...outcome, language: ctx.lang, latency_ms: Date.now() - started });
+  } catch (err) {
+    deps.log.error({ err, messageId }, "message handling failed");
+    await deps.repo
+      .updateMessage(messageId, { ...outcome, error: String(err).slice(0, 500), latency_ms: Date.now() - started })
+      .catch(() => undefined);
+    await deps.wa.sendText(msg.from, t(ctx.lang, "error")).catch(() => undefined);
+  }
+}
+
+async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
+  const { deps, msg, user } = ctx;
+  const to = msg.from;
+  const choice = msg.interactive?.button_reply?.id ?? msg.interactive?.list_reply?.id;
+  const text = msg.text?.body?.trim();
+
+  // 1. Consent (NDPA 2023): nothing is processed before an explicit yes.
+  if (!user.consent_at) {
+    if (choice === "consent_yes") {
+      await deps.repo.setConsent(user.id);
+      out.intent = "consent_given";
+      return sendLanguagePicker(ctx);
+    }
+    if (choice === "consent_no") {
+      out.intent = "consent_declined";
+      await deps.wa.sendText(to, t("en", "consent_declined"));
+      return;
+    }
+    out.intent = "consent_prompt";
+    await deps.wa.sendButtons(to, t("en", "consent_prompt", { privacy_url: deps.privacyUrl }), [
+      { id: "consent_yes", title: t("en", "consent_yes") },
+      { id: "consent_no", title: t("en", "consent_no") },
+    ]);
+    return;
+  }
+
+  // 2. Language choice.
+  if (choice?.startsWith("lang_")) {
+    const lang = choice.slice(5) as Lang;
+    if (LANGS.includes(lang)) {
+      await deps.repo.setLanguage(user.id, lang);
+      ctx.lang = lang;
+      out.intent = "language_set";
+      return deliver(ctx, { text: t(lang, "welcome"), voice: true });
+    }
+  }
+  if (!user.language) {
+    out.intent = "language_prompt";
+    return sendLanguagePicker(ctx);
+  }
+
+  // 3. Commands and confirmations.
+  const command = text ? COMMANDS[text.toUpperCase().replace(/[^A-Z]/g, "")] : undefined;
+  if (command === "help") {
+    out.intent = "help";
+    return deliver(ctx, { text: t(ctx.lang, "help"), voice: false });
+  }
+  if (command === "language") {
+    out.intent = "language_prompt";
+    return sendLanguagePicker(ctx);
+  }
+  if (command === "delete") {
+    out.intent = "delete_prompt";
+    await deps.wa.sendButtons(to, t(ctx.lang, "delete_confirm"), [
+      { id: "delete_yes", title: t(ctx.lang, "delete_yes") },
+      { id: "delete_no", title: t(ctx.lang, "delete_no") },
+    ]);
+    return;
+  }
+  if (choice === "delete_yes") {
+    await deps.repo.deleteUser(user.id); // also removes this message row
+    await deps.wa.sendText(to, t(ctx.lang, "deleted"));
+    return;
+  }
+  if (choice === "delete_no") {
+    out.intent = "delete_cancelled";
+    await deps.wa.sendText(to, t(ctx.lang, "delete_cancelled"));
+    return;
+  }
+
+  // 4. Get the words: transcribe voice notes, take text as-is.
+  const isAudio = msg.type === "audio" && !!msg.audio;
+  let input: string;
+  if (isAudio) {
+    const media = await deps.wa.downloadMedia(msg.audio!.id);
+    const tr = await deps.engine.transcribe(media.bytes, media.mimeType, ctx.lang);
+    out.transcript = tr.text;
+    out.audio_seconds = tr.seconds;
+    if (!tr.text) {
+      out.intent = "empty_audio";
+      return deliver(ctx, { text: t(ctx.lang, "transcribe_empty"), voice: true });
+    }
+    input = tr.text;
+  } else if (text) {
+    out.transcript = text;
+    input = text;
+  } else {
+    out.intent = "unsupported";
+    await deps.wa.sendText(to, t(ctx.lang, "unsupported_type"));
+    return;
+  }
+
+  // 5. Understand (N-ATLaS router) and act.
+  const intent = parseIntent(await deps.engine.route(input, ctx.lang, todayWAT(ctx.now)));
+  out.intent = intent.intent;
+  out.payload = intent;
+
+  let reply = await applyCommerce(ctx, intent);
+  if (!reply && intent.intent === "ask_question") reply = await answerQuestion(ctx, intent.topic, intent.question ?? input);
+  if (!reply && intent.intent === "help") reply = { text: t(ctx.lang, "help"), voice: false };
+  if (!reply && intent.intent === "greeting") reply = { text: t(ctx.lang, "greeting"), voice: true };
+  reply ??= { text: t(ctx.lang, "unknown"), voice: true };
+
+  // Echo what we heard so the trader can catch transcription mistakes.
+  const shown = isAudio ? `${t(ctx.lang, "heard", { transcript: input })}\n\n${reply.text}` : reply.text;
+  await deliver(ctx, { ...reply, text: shown, spoken: reply.spoken ?? reply.text, voice: reply.voice || isAudio });
+
+  if (reply.autoTipTopic) {
+    const tip = await autoTip(ctx, reply.autoTipTopic);
+    if (tip) await deliver(ctx, tip);
+  }
+}
+
+async function sendLanguagePicker(ctx: Ctx): Promise<void> {
+  await ctx.deps.wa.sendList(ctx.msg.from, LANGUAGE_PROMPT, t("en", "language_button"), LANGUAGE_ROWS);
+}
+
+/** Text first (instant), then the voice note (slower), so nobody waits on TTS. */
+async function deliver(ctx: Ctx, reply: Reply): Promise<void> {
+  const { deps } = ctx;
+  await deps.wa.sendText(ctx.msg.from, reply.text);
+  await deps.repo.insertOutbound({ user_id: ctx.user.id, type: "text", language: ctx.lang, payload: { text: reply.text } });
+
+  let audioSent = false;
+  if (reply.voice && deps.voiceReplies) {
+    try {
+      const ogg = await deps.engine.speak(reply.spoken ?? reply.text, ctx.lang);
+      await deps.wa.sendVoice(ctx.msg.from, ogg);
+      await deps.repo.insertOutbound({ user_id: ctx.user.id, type: "audio", language: ctx.lang });
+      audioSent = true;
+    } catch (err) {
+      deps.log.warn({ err }, "voice reply failed; text already sent");
+    }
+  }
+
+  if (reply.tip) {
+    await deps.repo.insertTipDelivery({
+      user_id: ctx.user.id,
+      tip_id: reply.tip.id,
+      message_id: ctx.messageId,
+      trigger: reply.tip.trigger,
+      audio_sent: audioSent,
+    });
+  }
+}
