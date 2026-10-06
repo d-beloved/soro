@@ -1,5 +1,5 @@
-import { LANGS, parseIntent, type Lang } from "../domain/intents.js";
-import { parseRef } from "../domain/ref.js";
+import { Intent, LANGS, parseIntent, type Lang } from "../domain/intents.js";
+import { parseRef, shareCode } from "../domain/ref.js";
 import { todayWAT } from "../domain/time.js";
 import { hashPhone } from "../lib/hash.js";
 import { LANGUAGE_PROMPT, LANGUAGE_ROWS, t } from "../locales/index.js";
@@ -16,12 +16,15 @@ interface Outcome {
   audio_seconds?: number;
 }
 
-const COMMANDS: Record<string, "help" | "language" | "delete"> = {
+const COMMANDS: Record<string, "help" | "language" | "delete" | "undo" | "share"> = {
   HELP: "help",
   MENU: "help",
   LANGUAGE: "language",
   LANG: "language",
   DELETE: "delete",
+  UNDO: "undo",
+  SHARE: "share",
+  INVITE: "share",
 };
 
 export async function handleMessage(deps: Deps, msg: InboundMessage): Promise<void> {
@@ -109,6 +112,20 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
       { id: "delete_no", title: t(ctx.lang, "delete_no") },
     ]);
     return;
+  }
+  if (command === "undo") {
+    out.intent = "undo_last";
+    const reply = await applyCommerce(ctx, Intent.parse({ intent: "undo_last" }));
+    return deliver(ctx, { ...reply!, voice: false });
+  }
+  if (command === "share") {
+    out.intent = "share";
+    const code = shareCode(user.id);
+    const link = `https://wa.me/${deps.publicNumber}?text=${encodeURIComponent(`Hi SoroEngine [${code}]`)}`;
+    const count = await deps.repo.countReferrals(code);
+    await deliver(ctx, { text: t(ctx.lang, "share_intro", { count }), voice: false });
+    // A separate message, so it can be forwarded as it is.
+    return deliver(ctx, { text: t(ctx.lang, "share_message", { link }), voice: false });
   }
   if (choice === "delete_yes") {
     await deps.repo.deleteUser(user.id); // also removes this message row

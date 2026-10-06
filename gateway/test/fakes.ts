@@ -1,4 +1,4 @@
-import type { Repo, SummaryRow, TipRow, UserRow } from "../src/db/repo.js";
+import type { DebtRow, Repo, SummaryRow, TipRow, UserRow } from "../src/db/repo.js";
 import type { EngineApi } from "../src/engine/client.js";
 import type { Deps } from "../src/pipeline/context.js";
 import type { WhatsAppApi } from "../src/whatsapp/client.js";
@@ -19,6 +19,7 @@ export function fakeRepo() {
     txns: [] as any[],
     loans: [] as any[],
     tipDeliveries: [] as any[],
+    budgets: new Map<string, number>(),
   };
   let n = 0;
   const repo: Repo = {
@@ -52,18 +53,49 @@ export function fakeRepo() {
       state.outbound.push(row);
     },
     async insertTransaction(row) {
-      state.txns.push(row);
+      state.txns.push({ id: `t${++n}`, voided_at: null, ...row });
+    },
+    async lastTransaction(userId) {
+      return state.txns.filter((t) => t.user_id === userId && !t.voided_at).at(-1) ?? null;
+    },
+    async voidTransaction(id) {
+      state.txns.find((t) => t.id === id).voided_at = "2026-10-04T10:00:00Z";
+    },
+    async updateTransactionAmount(id, amount) {
+      state.txns.find((t) => t.id === id).amount_ngn = amount;
+    },
+    async debts(userId) {
+      const out = new Map<string, DebtRow>();
+      for (const t of state.txns.filter((t) => t.user_id === userId && !t.voided_at && t.kind.startsWith("debt"))) {
+        const key = `${(t.counterparty ?? "").toLowerCase()}|${t.kind}`;
+        const r = out.get(key) ?? { counterparty: t.counterparty, kind: t.kind, total: 0 };
+        r.total += t.amount_ngn ?? 0;
+        out.set(key, r);
+      }
+      return [...out.values()];
+    },
+    async setBudget(userId, category, amount) {
+      state.budgets.set(`${userId}|${category}`, amount);
+    },
+    async budgets(userId) {
+      return [...state.budgets]
+        .filter(([k]) => k.startsWith(`${userId}|`))
+        .map(([k, amount_ngn]) => ({ category: k.split("|")[1]!, amount_ngn }));
+    },
+    async countReferrals(code) {
+      return [...users.values()].filter((u) => u.ref_source === code && u.consent_at).length;
     },
     async insertLoanIntake(row) {
       state.loans.push(row);
     },
     async summary(userId) {
       const out = new Map<string, SummaryRow>();
-      for (const t of state.txns.filter((t) => t.user_id === userId)) {
-        const r = out.get(t.kind) ?? { kind: t.kind, total: 0, n: 0 };
+      for (const t of state.txns.filter((t) => t.user_id === userId && !t.voided_at)) {
+        const key = `${t.kind}|${t.category}`;
+        const r = out.get(key) ?? { kind: t.kind, category: t.category ?? null, total: 0, n: 0 };
         r.total += t.amount_ngn ?? 0;
         r.n++;
-        out.set(t.kind, r);
+        out.set(key, r);
       }
       return [...out.values()];
     },
@@ -145,6 +177,7 @@ export function makeDeps(overrides: Partial<Deps> = {}) {
     log: { info() {}, warn() {}, error() {} } as unknown as Deps["log"],
     phoneSalt: "test-salt-test-salt",
     privacyUrl: "https://soro.charavol.com/privacy",
+    publicNumber: "2349077485454",
     voiceReplies: true,
     now: () => new Date("2026-10-04T10:00:00Z"),
     ...overrides,

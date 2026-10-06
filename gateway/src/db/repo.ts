@@ -1,7 +1,26 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Lang, TipTopic } from "../domain/intents.js";
 
-export type TxnKind = "sale" | "expense" | "debt_owed_to_me" | "debt_i_owe" | "stock";
+export type TxnKind =
+  | "sale"
+  | "expense"
+  | "income"
+  | "debt_owed_to_me"
+  | "debt_i_owe"
+  | "debt_paid_to_me"
+  | "debt_i_paid"
+  | "stock";
+
+export interface TxnRow {
+  id: string;
+  kind: TxnKind;
+  item: string | null;
+  qty: number | null;
+  unit: string | null;
+  amount_ngn: number | null;
+  counterparty: string | null;
+  category: string | null;
+}
 
 export interface UserRow {
   id: string;
@@ -31,8 +50,16 @@ export interface MessagePatch {
 
 export interface SummaryRow {
   kind: TxnKind;
+  category: string | null;
   total: number;
   n: number;
+}
+
+/** All-time debt total for one person and one debt kind. */
+export interface DebtRow {
+  counterparty: string | null;
+  kind: TxnKind;
+  total: number;
 }
 
 export interface Repo {
@@ -53,7 +80,17 @@ export interface Repo {
     unit: string | null;
     amount_ngn: number | null;
     counterparty: string | null;
+    category: string | null;
   }): Promise<void>;
+  /** The user's most recent record that has not been undone. */
+  lastTransaction(userId: string): Promise<TxnRow | null>;
+  voidTransaction(id: string): Promise<void>;
+  updateTransactionAmount(id: string, amountNgn: number): Promise<void>;
+  debts(userId: string): Promise<DebtRow[]>;
+  setBudget(userId: string, category: string, amountNgn: number): Promise<void>;
+  budgets(userId: string): Promise<{ category: string; amount_ngn: number }[]>;
+  /** How many people consented after arriving through this share code. */
+  countReferrals(code: string): Promise<number>;
   insertLoanIntake(row: {
     user_id: string;
     message_id: string;
@@ -111,7 +148,7 @@ export function createRepo(url: string, serviceRoleKey: string): Repo {
     },
 
     async deleteUser(userId) {
-      // Cascades to messages, transactions, loan_intakes, tip_deliveries.
+      // Cascades to messages, transactions, loan_intakes, tip_deliveries, budgets.
       check(await db.from("users").delete().eq("id", userId));
     },
 
@@ -133,15 +170,65 @@ export function createRepo(url: string, serviceRoleKey: string): Repo {
       check(await db.from("transactions").insert(row));
     },
 
+    async lastTransaction(userId) {
+      const row = check(
+        await db
+          .from("transactions")
+          .select("id, kind, item, qty, unit, amount_ngn, counterparty, category")
+          .eq("user_id", userId)
+          .is("voided_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ) as TxnRow | null;
+      return row && { ...row, qty: row.qty == null ? null : Number(row.qty), amount_ngn: row.amount_ngn == null ? null : Number(row.amount_ngn) };
+    },
+
+    async voidTransaction(id) {
+      check(await db.from("transactions").update({ voided_at: new Date().toISOString() }).eq("id", id));
+    },
+
+    async updateTransactionAmount(id, amountNgn) {
+      check(await db.from("transactions").update({ amount_ngn: amountNgn }).eq("id", id));
+    },
+
+    async debts(userId) {
+      const rows = check(await db.rpc("debts_for", { p_user: userId })) as
+        | { counterparty: string | null; kind: TxnKind; total: number | string }[]
+        | null;
+      return (rows ?? []).map((r) => ({ counterparty: r.counterparty, kind: r.kind, total: Number(r.total) }));
+    },
+
+    async setBudget(userId, category, amountNgn) {
+      check(
+        await db
+          .from("budgets")
+          .upsert({ user_id: userId, category, amount_ngn: amountNgn, updated_at: new Date().toISOString() }, { onConflict: "user_id,category" }),
+      );
+    },
+
+    async budgets(userId) {
+      const rows = check(await db.from("budgets").select("category, amount_ngn").eq("user_id", userId)) as
+        | { category: string; amount_ngn: number | string }[]
+        | null;
+      return (rows ?? []).map((r) => ({ category: r.category, amount_ngn: Number(r.amount_ngn) }));
+    },
+
+    async countReferrals(code) {
+      const res = await db.from("users").select("id", { count: "exact", head: true }).eq("ref_source", code).not("consent_at", "is", null);
+      check(res);
+      return res.count ?? 0;
+    },
+
     async insertLoanIntake(row) {
       check(await db.from("loan_intakes").insert(row));
     },
 
     async summary(userId, since) {
       const rows = check(await db.rpc("summary_for", { p_user: userId, p_since: since.toISOString() })) as
-        | { kind: TxnKind; total: number | string; n: number | string }[]
+        | { kind: TxnKind; category: string | null; total: number | string; n: number | string }[]
         | null;
-      return (rows ?? []).map((r) => ({ kind: r.kind, total: Number(r.total), n: Number(r.n) }));
+      return (rows ?? []).map((r) => ({ kind: r.kind, category: r.category, total: Number(r.total), n: Number(r.n) }));
     },
 
     async pickTip(userId, topic) {

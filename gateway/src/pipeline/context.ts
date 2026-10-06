@@ -12,6 +12,8 @@ export interface Deps {
   log: Pick<Logger, "info" | "warn" | "error">;
   phoneSalt: string;
   privacyUrl: string;
+  /** The bot's WhatsApp number, digits only, for share links. */
+  publicNumber: string;
   voiceReplies: boolean;
   now?: () => Date;
 }

@@ -18,6 +18,8 @@ const Env = z.object({
 
   PHONE_HASH_SALT: z.string().min(16),
   PRIVACY_URL: z.string().url().default("https://soro.charavol.com/privacy"),
+  // The bot's public WhatsApp number (digits only), used in SHARE links.
+  WA_PUBLIC_NUMBER: z.string().regex(/^\d{10,15}$/).default("2349077485454"),
   VOICE_REPLIES: z.enum(["on", "off"]).default("on"),
 });
 

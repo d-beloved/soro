@@ -18,6 +18,7 @@ const app = createApp({
     log: logger,
     phoneSalt: cfg.PHONE_HASH_SALT,
     privacyUrl: cfg.PRIVACY_URL,
+    publicNumber: cfg.WA_PUBLIC_NUMBER,
     voiceReplies: cfg.VOICE_REPLIES === "on",
   },
 });

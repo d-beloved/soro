@@ -18,9 +18,14 @@ export type TipTopic = (typeof TIP_TOPICS)[number];
 export const INTENTS = [
   "log_sale",
   "log_expense",
+  "log_income",
   "log_debt",
+  "debt_paid",
   "stock_update",
   "summary_query",
+  "set_budget",
+  "undo_last",
+  "correct_last",
   "loan_intake",
   "ask_question",
   "greeting",
@@ -28,6 +33,26 @@ export const INTENTS = [
   "unknown",
 ] as const;
 export type IntentName = (typeof INTENTS)[number];
+
+/** Spending categories. The first two are business spending; the rest are personal. */
+export const CATEGORIES = [
+  "goods",
+  "business_costs",
+  "food",
+  "transport",
+  "data_airtime",
+  "rent_bills",
+  "family",
+  "health",
+  "school",
+  "fun",
+  "clothing",
+  "savings",
+  "other",
+] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+export const isBusinessCategory = (c: string | null | undefined): boolean => c === "goods" || c === "business_costs";
 
 const optStr = z
   .string()
@@ -47,6 +72,7 @@ export const Intent = z.object({
   amount_ngn: optNum,
   counterparty: optStr,
   direction: z.enum(["owed_to_me", "i_owe"]).nullish().catch(null).transform((v) => v ?? null),
+  category: z.enum(CATEGORIES).nullish().catch(null).transform((v) => v ?? null),
   period: z.enum(["today", "week", "month"]).nullish().catch(null).transform((v) => v ?? null),
   topic: z.enum(TIP_TOPICS).nullish().catch(null).transform((v) => v ?? null),
   question: optStr,

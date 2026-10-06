@@ -73,8 +73,8 @@ describe("commerce", () => {
     const t = await onboarded();
     t.engine.routeResult = { intent: "log_sale", amount_ngn: 10000 };
     await handleMessage(t.deps, text("sold 10k"));
-    t.engine.routeResult = { intent: "log_expense", amount_ngn: 2500 };
-    await handleMessage(t.deps, text("transport 2500"));
+    t.engine.routeResult = { intent: "log_expense", amount_ngn: 2500, category: "business_costs" };
+    await handleMessage(t.deps, text("transport for goods 2500"));
     t.engine.routeResult = { intent: "log_debt", counterparty: "Emeka", amount_ngn: 4000 };
     await handleMessage(t.deps, text("Emeka owe me 4k"));
     t.sent.length = 0;
@@ -82,9 +82,11 @@ describe("commerce", () => {
     await handleMessage(t.deps, text("how far today"));
     const body = t.sent[0]!.body!;
     expect(body).toContain("Sales: ₦10,000 (1)");
-    expect(body).toContain("Expenses: ₦2,500");
-    expect(body).toContain("Sales minus expenses: ₦7,500");
-    expect(body).toContain("People owe you: ₦4,000");
+    expect(body).toContain("Business costs: ₦2,500");
+    expect(body).toContain("Sales minus costs: ₦7,500");
+    expect(body).toContain("People owe you: ₦4,000 (Emeka ₦4,000)");
+    expect(body).not.toContain("Personal");
+    expect(body).toContain("Type SHARE");
   });
 
   it("attaches recorded monthly sales to a loan intake", async () => {
@@ -94,6 +96,141 @@ describe("commerce", () => {
     t.engine.routeResult = { intent: "loan_intake", amount_ngn: "100k", purpose: "buy goods" };
     await handleMessage(t.deps, text("I need 100k loan"));
     expect(t.state.loans[0]).toMatchObject({ amount_ngn: 100000, purpose: "buy goods", monthly_sales_ngn: 50000 });
+  });
+});
+
+describe("fixing mistakes", () => {
+  it("UNDO removes the last record from every total", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_sale", item: "rice", quantity: 3, unit: "bags", amount_ngn: 75000 };
+    await handleMessage(t.deps, text("sold rice 75k"));
+    t.sent.length = 0;
+    t.calls.length = 0;
+    await handleMessage(t.deps, text("undo"));
+    expect(t.calls).toEqual([]); // a command: no LLM call
+    expect(t.sent[0]!.body).toContain("Removed: Sale: 3 bags rice — ₦75,000");
+    expect(t.state.txns[0].voided_at).toBeTruthy();
+
+    t.engine.routeResult = { intent: "summary_query", period: "today" };
+    await handleMessage(t.deps, text("how far today"));
+    expect(t.sent.find((s) => s.body?.includes("Nothing recorded today"))).toBeDefined();
+  });
+
+  it("undo by voice, and says so when there is nothing to remove", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "undo_last" };
+    await handleMessage(t.deps, text("cancel am"));
+    expect(t.sent[0]!.body).toContain("nothing to remove");
+  });
+
+  it("corrects the amount of the last record", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_sale", item: "pepper", amount_ngn: 5000 };
+    await handleMessage(t.deps, text("sold pepper 5k"));
+    t.sent.length = 0;
+    t.engine.routeResult = { intent: "correct_last", amount_ngn: 50000 };
+    await handleMessage(t.deps, text("no be 5k, na 50k"));
+    expect(t.state.txns[0].amount_ngn).toBe(50000);
+    expect(t.sent[0]!.body).toContain("Fixed: Sale: pepper — ₦50,000");
+  });
+});
+
+describe("debts paid back", () => {
+  it("tracks what each person still owes", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_debt", counterparty: "Emeka", amount_ngn: 4000, direction: "owed_to_me" };
+    await handleMessage(t.deps, text("Emeka owe me 4k"));
+    t.engine.routeResult = { intent: "debt_paid", counterparty: "emeka", amount_ngn: 1500, direction: "owed_to_me" };
+    await handleMessage(t.deps, text("Emeka pay me 1500"));
+    expect(t.state.txns.at(-1)).toMatchObject({ kind: "debt_paid_to_me", amount_ngn: 1500 });
+    expect(t.sent.at(-1)!.body).toContain("emeka still owes you ₦2,500");
+
+    t.engine.routeResult = { intent: "debt_paid", counterparty: "Emeka", amount_ngn: 2500, direction: "owed_to_me" };
+    await handleMessage(t.deps, text("Emeka don pay the rest"));
+    expect(t.sent.find((s) => s.body?.includes("Emeka has paid everything"))).toBeDefined();
+
+    t.sent.length = 0;
+    t.engine.routeResult = { intent: "summary_query", period: "month" };
+    await handleMessage(t.deps, text("summary"));
+    expect(t.sent[0]!.body).not.toContain("People owe you");
+  });
+
+  it("records repayments the user makes", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_debt", counterparty: "Alhaji", amount_ngn: 20000, direction: "i_owe" };
+    await handleMessage(t.deps, text("I owe Alhaji 20k"));
+    t.engine.routeResult = { intent: "debt_paid", counterparty: "Alhaji", amount_ngn: 10000, direction: "i_owe" };
+    await handleMessage(t.deps, text("I pay Alhaji 10k"));
+    expect(t.sent.find((s) => s.body?.includes("You still owe Alhaji ₦10,000"))).toBeDefined();
+  });
+});
+
+describe("personal money", () => {
+  it("logs personal spending and income in their own summary section", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_income", item: "salary", amount_ngn: 150000 };
+    await handleMessage(t.deps, text("salary 150k"));
+    expect(t.state.txns.at(-1)).toMatchObject({ kind: "income", amount_ngn: 150000 });
+    t.engine.routeResult = { intent: "log_expense", item: "data", amount_ngn: 1500, category: "data_airtime" };
+    await handleMessage(t.deps, text("data 1500"));
+    expect(t.sent.find((s) => s.body?.includes("Spent: data — ₦1,500 (data & airtime)"))).toBeDefined();
+    t.engine.routeResult = { intent: "log_expense", item: "lunch", amount_ngn: 2500, category: "food" };
+    await handleMessage(t.deps, text("lunch 2500"));
+
+    t.sent.length = 0;
+    t.engine.routeResult = { intent: "summary_query", period: "month" };
+    await handleMessage(t.deps, text("where my money dey go"));
+    const body = t.sent[0]!.body!;
+    expect(body).toContain("Money in: ₦150,000");
+    expect(body).toContain("Spent: ₦4,000");
+    expect(body).toContain("Left: ₦146,000");
+    expect(body).toContain("Most spending: food ₦2,500, data & airtime ₦1,500");
+    expect(body).not.toContain("Business");
+  });
+
+  it("an expense without a category counts as personal", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_expense", amount_ngn: 700 };
+    await handleMessage(t.deps, text("I spend 700"));
+    expect(t.state.txns[0]).toMatchObject({ kind: "expense", category: "other" });
+  });
+
+  it("sets a budget and reports against it on each spend", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "set_budget", category: "food", amount_ngn: "20k" };
+    await handleMessage(t.deps, text("food budget 20k"));
+    expect(t.sent[0]!.body).toContain("Budget set: food, ₦20,000 a month");
+    t.engine.routeResult = { intent: "log_expense", item: "foodstuff", amount_ngn: 14000, category: "food" };
+    await handleMessage(t.deps, text("foodstuff 14k"));
+    expect(t.sent.find((s) => s.body?.includes("Food this month: ₦14,000 of your ₦20,000 budget (₦6,000 left)"))).toBeDefined();
+    t.engine.routeResult = { intent: "log_expense", item: "suya", amount_ngn: 8000, category: "food" };
+    await handleMessage(t.deps, text("suya 8k"));
+    expect(t.sent.find((s) => s.body?.includes("₦2,000 over your ₦20,000 budget"))).toBeDefined();
+  });
+
+  it("asks which category a budget is for", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "set_budget", amount_ngn: 20000 };
+    await handleMessage(t.deps, text("budget 20k"));
+    expect(t.sent[0]!.body).toContain("Budget for what?");
+  });
+});
+
+describe("sharing", () => {
+  it("SHARE sends a forwardable link with the user's code, and counts who joined through it", async () => {
+    const t = await onboarded();
+    await handleMessage(t.deps, text("share"));
+    const link = t.sent[1]!.body!.match(/https:\/\/wa\.me\/2349077485454\?text=\S+/)![0];
+    const code = decodeURIComponent(link.split("text=")[1]!).match(/\[(F-[0-9A-Z]+)\]/)![1]!;
+    expect(t.sent[0]!.body).toContain("joined with your link so far: 0");
+
+    // a friend arrives through the link and consents
+    const friend = { ...text(`Hi SoroEngine [${code}]`), from: "2348099999999" };
+    await handleMessage(t.deps, friend);
+    await handleMessage(t.deps, { ...tap("consent_yes"), from: "2348099999999" });
+    t.sent.length = 0;
+    await handleMessage(t.deps, text("SHARE"));
+    expect(t.sent[0]!.body).toContain("joined with your link so far: 1");
   });
 });
 
