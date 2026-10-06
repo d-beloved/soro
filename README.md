@@ -34,7 +34,7 @@ Landing page, privacy, terms ─────── site/  (static, Cloudflare Pa
 |---|---|
 | `gateway/` | WhatsApp webhook service. `src/pipeline/handle.ts` is the message flow. |
 | `engine/` | GPU model service. `soro_engine/api.py` holds the endpoints and `modal_app.py` the deployment. |
-| `supabase/migrations/` | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), and personal money, budgets and undo (`0003_personal_money.sql`). |
+| `supabase/migrations/` | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), personal money, budgets and undo (`0003_personal_money.sql`), and the gateway's table privileges (`0004_service_role_grants.sql`). |
 | `supabase/seed/tips.sql` | The financial-literacy tip library. |
 | `site/` | Landing page, privacy notice, terms, logo and the WhatsApp profile image. |
 | `scripts/` | `set_whatsapp_number.py` (puts the number and QR into the site) and `serve_site.mjs` (local preview). |
@@ -83,7 +83,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
 
 ## Deploy
 
-1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `supabase/seed/tips.sql`.
+1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `supabase/seed/tips.sql`.
 2. **Engine on Modal:**
    ```bash
    cd engine
@@ -93,7 +93,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
    uv run --with modal modal deploy modal_app.py
    ```
    The deploy prints the engine URL. Containers scale to zero. During Oct 7–11 a cron keeps one warm from 09:00 to 21:00 WAT. Use `modal run modal_app.py::warm --on` or `--no-on` to override.
-3. **Gateway on Railway:** create a new project from the GitHub repo, set the root directory to `gateway`, and add every variable from `.env.example`. `railway.json` sets the build, the start command and the `/health` check.
+3. **Gateway on Railway:** create a new project from the GitHub repo, set the root directory to `gateway` and the config file path to `/gateway/railway.json` (Railway doesn't look for it under the root directory), and add every variable from `.env.example`, with `ENGINE_URL` set to the Modal URL. `railway.json` sets the build, the start command and the `/health` check.
 4. **Meta webhook:** set the callback URL to `https://<railway-domain>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
 5. **Site on Cloudflare Pages:** no build command, output directory `site`, custom domain `soro.charavol.com`.
 
