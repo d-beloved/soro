@@ -35,12 +35,23 @@ class LLM:
         return (out["choices"][0]["message"]["content"] or "").strip()
 
     def route(self, text: str, lang: Lang, today: str) -> dict:
-        raw = self.chat(prompts.route_messages(text, lang, today), schema=prompts.ROUTER_SCHEMA, max_tokens=200)
+        messages = prompts.route_messages(text, lang, today)
+        raw = self.chat(messages, schema=prompts.ROUTER_SCHEMA, max_tokens=200)
         try:
             result = json.loads(raw)
         except json.JSONDecodeError:
             return {"intent": "unknown"}
+        result = prompts.tidy_route(result)
+        if prompts.needs_category(result):
+            result = {**result, "category": self._category(text)}
         return reconcile_amount(result, text)
+
+    def _category(self, text: str) -> str | None:
+        raw = self.chat(prompts.category_messages(text), schema=prompts.CATEGORY_SCHEMA, max_tokens=20)
+        try:
+            return prompts.tidy_route({"intent": "log_expense", **json.loads(raw)}).get("category")
+        except (json.JSONDecodeError, TypeError):
+            return None
 
     def adapt(self, tip: str, question: str, lang: Lang) -> str:
         return self.chat(prompts.adapt_messages(tip, question, lang), max_tokens=220)

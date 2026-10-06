@@ -19,7 +19,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-AMOUNT_INTENTS = {"log_sale", "log_expense", "log_debt", "loan_intake"}
+AMOUNT_INTENTS = {"log_sale", "log_expense", "log_income", "log_debt", "debt_paid", "set_budget", "correct_last", "loan_intake"}
 
 _EN_SMALL = {
     w: i

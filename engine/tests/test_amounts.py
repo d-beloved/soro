@@ -80,3 +80,11 @@ def test_few_shot_amounts_agree_with_parser():
     for text, out in prompts.FEW_SHOT:
         if out.get("amount_ngn") is not None:
             assert extract_amount_ngn(text) == out["amount_ngn"], text
+
+
+def test_reconcile_covers_new_intents():
+    # a hallucinated amount on the new money intents is replaced by the one in the message
+    for intent in ("log_income", "debt_paid", "set_budget", "correct_last"):
+        assert reconcile_amount({"intent": intent, "amount_ngn": 7}, "na 50k")["amount_ngn"] == 50000
+    # undo has no amount and is left alone
+    assert reconcile_amount({"intent": "undo_last"}, "cancel the 5k one") == {"intent": "undo_last"}

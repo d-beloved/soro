@@ -108,3 +108,14 @@ def test_rejects_unknown_language(client):
 
 def test_schema_is_json_serialisable():
     json.dumps(prompts.ROUTER_SCHEMA)
+
+
+def test_category_kept_only_where_it_applies():
+    from soro_engine.prompts import needs_category, tidy_route
+
+    assert tidy_route({"intent": "log_sale", "category": "goods"})["category"] is None
+    assert tidy_route({"intent": "log_expense", "category": "personal"})["category"] is None  # not a category
+    assert tidy_route({"intent": "log_expense", "category": "goods"})["category"] == "goods"
+    assert tidy_route({"intent": "set_budget", "category": "food"})["category"] == "food"
+    assert needs_category({"intent": "log_expense"}) and needs_category({"intent": "set_budget", "category": None})
+    assert not needs_category({"intent": "log_sale"}) and not needs_category({"intent": "log_expense", "category": "food"})
