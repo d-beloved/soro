@@ -2,7 +2,10 @@
 
 A voice-first WhatsApp assistant for Nigerian informal traders, by Charavol Technologies Ltd.
 
-Traders send a voice note or text in English, Pidgin, Yoruba, Hausa or Igbo. SoroEngine keeps their shop book (sales, expenses, debts, stock, summaries, loan requests) and shares short money tips, as text and as a voice reply.
+People send a voice note or text in English, Pidgin, Yoruba, Hausa or Igbo. SoroEngine keeps their money book and shares short money tips, as text and as a voice reply:
+- **Small businesses** (traders, artisans, food sellers, riders): sales or paid work, business costs, stock counts, debts and repayments, summaries, loan requests.
+- **Personal money** (workers, students): spending by category, money in, monthly budgets, money lent and repaid.
+- **Everyone:** fix the last amount ("no be 5k, na 50k") or type `UNDO`; `SHARE` sends a forwardable invite link that carries the user's own referral code.
 
 Built for the NITDA / NCAIR **National AI Champions (NAIC) 2026**, Voice-First track. The plan is in [PLAN.md](PLAN.md).
 
@@ -31,7 +34,7 @@ Landing page, privacy, terms ─────── site/  (static, Cloudflare Pa
 |---|---|
 | `gateway/` | WhatsApp webhook service. `src/pipeline/handle.ts` is the message flow. |
 | `engine/` | GPU model service. `soro_engine/api.py` holds the endpoints and `modal_app.py` the deployment. |
-| `supabase/migrations/` | Schema (`0001_init.sql`) and the retention purge (`0002_retention.sql`). |
+| `supabase/migrations/` | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), and personal money, budgets and undo (`0003_personal_money.sql`). |
 | `supabase/seed/tips.sql` | The financial-literacy tip library. |
 | `site/` | Landing page, privacy notice, terms, logo and the WhatsApp profile image. |
 | `scripts/` | `set_whatsapp_number.py` (puts the number and QR into the site) and `serve_site.mjs` (local preview). |
@@ -46,7 +49,7 @@ Requirements: Node 22, [uv](https://docs.astral.sh/uv/), ffmpeg (`brew install f
 cd gateway
 npm install
 cp .env.example .env      # fill it in
-npm test                  # 43 tests
+npm test                  # 53 tests
 npm run typecheck
 npm run dev               # http://localhost:3000
 ```
@@ -58,7 +61,7 @@ To receive real WhatsApp messages locally, expose port 3000 (for example `cloudf
 ```bash
 cd engine
 uv sync                           # light deps, enough for tests
-uv run pytest                     # 46 tests
+uv run pytest                     # 48 tests
 ```
 
 To run the models locally (Apple Silicon Mac: ASR and LLM work; TTS is CPU-only and slow, so set `VOICE_REPLIES=off` in the gateway):
@@ -80,7 +83,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
 
 ## Deploy
 
-1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `supabase/seed/tips.sql`.
+1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `supabase/seed/tips.sql`.
 2. **Engine on Modal:**
    ```bash
    cd engine
