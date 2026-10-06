@@ -19,3 +19,4 @@ exports/
 engine/vendor/
 .wrangler/
 .claude/
+supabase/.temp/
