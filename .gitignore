@@ -21,7 +21,7 @@ engine/vendor/
 .claude/
 supabase/.temp/
 
-# Internal planning notes: kept on disk, never committed
+# Internal planning notes
 PLAN.md
 soro_project_blueprint_grant_strategy.md
 private/
