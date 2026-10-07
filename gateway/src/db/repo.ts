@@ -150,8 +150,8 @@ export function createRepo(url: string, serviceRoleKey: string): Repo {
     },
 
     async deleteUser(userId) {
-      // Cascades to messages, transactions, loan_intakes, tip_deliveries, budgets.
-      check(await db.from("users").delete().eq("id", userId));
+      // Erases the user and everything they sent; keeps a bare, unlinkable row per message (0006_anonymise_on_delete.sql).
+      check(await db.rpc("erase_user", { p_user: userId }));
     },
 
     async insertInbound(row) {

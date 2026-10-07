@@ -1,8 +1,9 @@
 # Sọ̀rọ̀
 
-A voice-first WhatsApp money assistant for people in Nigeria, with more of Africa coming soon, by Charavol Technologies Ltd. Sọ̀rọ̀ means "talk" in Yorùbá. SoroEngine is the code name of the back end (the engine and gateway in this repo, and their service URLs).
+A voice-first WhatsApp money assistant for Nigerians, with more of Africa coming soon, by Charavol Technologies Ltd. Sọ̀rọ̀ means "talk" in Yorùbá. SoroEngine is the code name of the back end (the engine and gateway in this repo, and their service URLs).
 
 People send a voice note or text in English, Pidgin, Yoruba, Hausa or Igbo about what they spend, earn, sell or lend. Sọ̀rọ̀ keeps the record and tells them where their money went. A voice note gets a short spoken reply as well as the text:
+
 - **Personal money** (workers, students): spending by category, money in, monthly budgets, money lent and repaid, summaries.
 - **Small businesses** (traders, artisans, food sellers, riders): sales or paid work, business costs, stock counts, debts and repayments, loan requests.
 - **Everyone:** money tips as text, fix the last amount ("no be 5k, na 50k") or type `UNDO`; `SHARE` sends a forwardable invite link that carries the user's own referral code.
@@ -23,19 +24,19 @@ Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on Ren
 Landing page, privacy, terms ─────── site/  (static, Cloudflare Pages → soro.charavol.com)
 ```
 
-- **Privacy:** phone numbers are stored only as a salted SHA-256 hash. Nothing happens before the user consents (NDPA 2023). Audio is never stored. `DELETE` erases a user. Inactive users are purged after 12 months.
+- **Privacy:** phone numbers are stored only as a salted SHA-256 hash. Nothing happens before the user consents (NDPA 2023). Audio is never stored. `DELETE` erases a user and everything they sent, as does the purge of users inactive for 12 months; each leaves only an unlinkable row per message (time, voice or text, language, intent) so usage counts survive.
 - **Tips** come only from the curated library in `supabase/seed/tips.sql`. The LLM rephrases a tip; it does not invent advice.
 
 ## Repository
 
-| Path | What |
-|---|---|
-| `gateway/` | WhatsApp webhook service. `src/pipeline/handle.ts` is the message flow. |
-| `engine/` | GPU model service. `soro_engine/api.py` holds the endpoints and `modal_app.py` the deployment. |
-| `supabase/migrations/` | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), personal money, budgets and undo (`0003_personal_money.sql`), the gateway's table privileges (`0004_service_role_grants.sql`), and the export view names (`0005_rename_views.sql`). |
-| `supabase/seed/tips.sql` | The financial-literacy tip library. |
-| `site/` | Landing page, privacy notice, terms, logo and the WhatsApp profile image. |
-| `scripts/` | `set_whatsapp_number.py` (puts the number and QR into the site) and `serve_site.mjs` (local preview). |
+| Path                     | What                                                                                                                                                                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gateway/`               | WhatsApp webhook service. `src/pipeline/handle.ts` is the message flow.                                                                                                                                                                                   |
+| `engine/`                | GPU model service. `soro_engine/api.py` holds the endpoints and `modal_app.py` the deployment.                                                                                                                                                            |
+| `supabase/migrations/`   | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), personal money, budgets and undo (`0003_personal_money.sql`), the gateway's table privileges (`0004_service_role_grants.sql`), the export view names (`0005_rename_views.sql`), and anonymise-on-delete (`0006_anonymise_on_delete.sql`). |
+| `supabase/seed/tips.sql` | The financial-literacy tip library.                                                                                                                                                                                                                       |
+| `site/`                  | Landing page, privacy notice, terms, logo and the WhatsApp profile image.                                                                                                                                                                                 |
+| `scripts/`               | `set_whatsapp_number.py` (puts the number and QR into the site) and `serve_site.mjs` (local preview).                                                                                                                                                     |
 
 ## Local development
 
@@ -81,7 +82,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
 
 ## Deploy
 
-1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `0005_rename_views.sql`, then `supabase/seed/tips.sql`.
+1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `0005_rename_views.sql`, then `0006_anonymise_on_delete.sql`, then `supabase/seed/tips.sql`.
 2. **Engine on Modal:**
    ```bash
    cd engine
@@ -97,14 +98,14 @@ node scripts/serve_site.mjs       # http://localhost:4321
 
 ## Scripts
 
-| Command | Does |
-|---|---|
-| `npm run export:csv` (gateway) | Writes the interaction log to `exports/interactions_<date>.csv` |
-| `uv run python scripts/translate_tips.py` (engine) | Drafts Yoruba/Hausa/Igbo tips into `supabase/seed/tip_translations.json` |
-| `npm run tips:sync` (gateway) | Uploads those drafts to Supabase |
-| `npm run locales:translate` (gateway) | Drafts missing `src/locales/{yo,ha,ig}.json` strings |
-| `uv run --extra ml python scripts/eval_asr.py` (engine) | ASR word error rate from `engine/eval/<lang>/transcripts.csv` |
-| `uv run --with qrcode python scripts/set_whatsapp_number.py 234…` | Puts the WhatsApp number and QR into the site |
+| Command                                                           | Does                                                                     |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `npm run export:csv` (gateway)                                    | Writes the interaction log to `exports/interactions_<date>.csv`          |
+| `uv run python scripts/translate_tips.py` (engine)                | Drafts Yoruba/Hausa/Igbo tips into `supabase/seed/tip_translations.json` |
+| `npm run tips:sync` (gateway)                                     | Uploads those drafts to Supabase                                         |
+| `npm run locales:translate` (gateway)                             | Drafts missing `src/locales/{yo,ha,ig}.json` strings                     |
+| `uv run --extra ml python scripts/eval_asr.py` (engine)           | ASR word error rate from `engine/eval/<lang>/transcripts.csv`            |
+| `uv run --with qrcode python scripts/set_whatsapp_number.py 234…` | Puts the WhatsApp number and QR into the site                            |
 
 All machine translations are drafts. A native speaker must review them before they are marked `reviewed`.
 
