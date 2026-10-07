@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { handleMessage } from "../src/pipeline/handle.js";
-import { makeDeps, pick, PHONE, tap, text, voice } from "./fakes.js";
+import { FAKE_NOW, makeDeps, pick, PHONE, tap, text, voice } from "./fakes.js";
 
 async function onboarded(lang = "lang_en") {
   const t = makeDeps();
@@ -31,19 +31,32 @@ describe("onboarding", () => {
     expect(state.txns).toHaveLength(0);
   });
 
-  it("consent -> language list -> welcome with voice", async () => {
+  it("consent -> language list -> welcome as text", async () => {
     const { deps, sent } = makeDeps();
     await handleMessage(deps, text("hello"));
     await handleMessage(deps, tap("consent_yes"));
     expect(sent.at(-1)).toMatchObject({ kind: "list", ids: ["lang_en", "lang_yo", "lang_ha", "lang_ig"] });
     await handleMessage(deps, pick("lang_yo"));
-    expect(sent.at(-2)?.kind).toBe("text");
-    expect(sent.at(-1)?.kind).toBe("voice");
+    expect(sent.at(-1)?.kind).toBe("text");
+    expect(sent.at(-2)?.kind).toBe("list");
+  });
+
+  it("sends the consent prompt once for a burst of messages, again after 10 minutes", async () => {
+    const t = makeDeps();
+    await handleMessage(t.deps, text("Hi"));
+    await handleMessage(t.deps, text("Hello"));
+    await handleMessage(t.deps, voice());
+    expect(t.sent.map((s) => s.kind)).toEqual(["buttons"]);
+    expect(t.state.messages.map((m) => m.intent)).toEqual(["consent_prompt", "consent_pending", "consent_pending"]);
+
+    t.deps.now = () => new Date(new Date(FAKE_NOW).getTime() + 11 * 60_000);
+    await handleMessage(t.deps, text("Hi again"));
+    expect(t.sent.map((s) => s.kind)).toEqual(["buttons", "buttons"]);
   });
 });
 
 describe("commerce", () => {
-  it("logs a voice-note sale, echoes the transcript, replies with text then voice, then an auto tip", async () => {
+  it("logs a voice-note sale, echoes the transcript, replies with text then voice, then a text-only auto tip", async () => {
     const t = await onboarded();
     t.engine.routeResult = { intent: "log_sale", item: "rice", quantity: 3, unit: "bags", amount_ngn: "75k" };
     await handleMessage(t.deps, voice());
@@ -53,8 +66,8 @@ describe("commerce", () => {
     ]);
     expect(t.sent[0]!.body).toContain('I heard: "I sell 3 bags of rice 75k"');
     expect(t.sent[0]!.body).toContain("₦75,000");
-    expect(t.sent.map((s) => s.kind)).toEqual(["text", "voice", "text", "voice"]);
-    expect(t.state.tipDeliveries).toEqual([expect.objectContaining({ tip_id: "record_keeping_01", trigger: "auto", audio_sent: true })]);
+    expect(t.sent.map((s) => s.kind)).toEqual(["text", "voice", "text"]);
+    expect(t.state.tipDeliveries).toEqual([expect.objectContaining({ tip_id: "record_keeping_01", trigger: "auto", audio_sent: false })]);
 
     const row = t.state.messages.at(-1);
     expect(row).toMatchObject({ intent: "log_sale", transcript: "I sell 3 bags of rice 75k", audio_seconds: 4.2, language: "en" });
@@ -241,8 +254,16 @@ describe("voice tutor", () => {
     await handleMessage(t.deps, text("How I go save?"));
     expect(t.calls).toContain("adapt");
     expect(t.sent[0]!.body).toContain("Adapted: Save a little every day.");
-    expect(t.sent[1]!.kind).toBe("voice");
-    expect(t.state.tipDeliveries[0]).toMatchObject({ tip_id: "savings_01", trigger: "asked", audio_sent: true });
+    expect(t.sent.map((s) => s.kind)).toEqual(["text"]);
+    expect(t.state.tipDeliveries[0]).toMatchObject({ tip_id: "savings_01", trigger: "asked", audio_sent: false });
+  });
+
+  it("answers a voice-note question by voice too", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "ask_question", topic: "savings", question: "How I go save?" };
+    await handleMessage(t.deps, voice());
+    expect(t.sent.map((s) => s.kind)).toEqual(["text", "voice"]);
+    expect(t.state.tipDeliveries[0]).toMatchObject({ trigger: "asked", audio_sent: true });
   });
 
   it("falls back to the stored translation if the LLM fails", async () => {

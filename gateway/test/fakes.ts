@@ -9,6 +9,9 @@ export const TIPS: TipRow[] = [
   { id: "savings_01", topic: "savings", text_en: "Save a little every day.", text_yo: "Fi owó díẹ̀ pamọ́ lójoojúmọ́.", text_ha: null, text_ig: null },
 ];
 
+/** The fixed clock for handled messages; makeDeps uses it for `now`. */
+export const FAKE_NOW = "2026-10-04T10:00:00Z";
+
 export function fakeRepo() {
   const users = new Map<string, UserRow & { phone_hash: string }>();
   const seenWa = new Set<string>();
@@ -43,11 +46,15 @@ export function fakeRepo() {
       if (seenWa.has(row.wa_message_id)) return null;
       seenWa.add(row.wa_message_id);
       const id = `m${++n}`;
-      state.messages.push({ id, ...row });
+      state.messages.push({ id, created_at: FAKE_NOW, ...row });
       return id;
     },
     async updateMessage(id, patch) {
       Object.assign(state.messages.find((m) => m.id === id) ?? {}, patch);
+    },
+    async lastIntentAt(userId, intent) {
+      const row = state.messages.filter((m) => m.user_id === userId && m.intent === intent).at(-1);
+      return row ? new Date(row.created_at) : null;
     },
     async insertOutbound(row) {
       state.outbound.push(row);
@@ -179,7 +186,7 @@ export function makeDeps(overrides: Partial<Deps> = {}) {
     privacyUrl: "https://soro.charavol.com/privacy",
     publicNumber: "2349077485454",
     voiceReplies: true,
-    now: () => new Date("2026-10-04T10:00:00Z"),
+    now: () => new Date(FAKE_NOW),
     ...overrides,
   };
   return { deps, ...r, ...w, ...e };

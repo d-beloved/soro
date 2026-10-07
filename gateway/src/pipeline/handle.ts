@@ -16,6 +16,9 @@ interface Outcome {
   audio_seconds?: number;
 }
 
+/** Someone who sends several messages before answering gets the consent prompt once, not once per message. */
+const CONSENT_REPROMPT_MS = 10 * 60_000;
+
 const COMMANDS: Record<string, "help" | "language" | "delete" | "undo" | "share"> = {
   HELP: "help",
   MENU: "help",
@@ -72,6 +75,11 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
       await deps.wa.sendText(to, t("en", "consent_declined"));
       return;
     }
+    const lastPrompt = await deps.repo.lastIntentAt(user.id, "consent_prompt");
+    if (lastPrompt && ctx.now.getTime() - lastPrompt.getTime() < CONSENT_REPROMPT_MS) {
+      out.intent = "consent_pending";
+      return;
+    }
     out.intent = "consent_prompt";
     await deps.wa.sendButtons(to, t("en", "consent_prompt", { privacy_url: deps.privacyUrl }), [
       { id: "consent_yes", title: t("en", "consent_yes") },
@@ -87,7 +95,7 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
       await deps.repo.setLanguage(user.id, lang);
       ctx.lang = lang;
       out.intent = "language_set";
-      return deliver(ctx, { text: t(lang, "welcome"), voice: true });
+      return deliver(ctx, { text: t(lang, "welcome"), voice: false });
     }
   }
   if (!user.language) {
@@ -172,8 +180,9 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   reply ??= { text: t(ctx.lang, "unknown"), voice: true };
 
   // Echo what we heard so the trader can catch transcription mistakes.
+  // Voice notes get a voice reply; text gets text only, so nobody waits on TTS they didn't ask for.
   const shown = isAudio ? `${t(ctx.lang, "heard", { transcript: input })}\n\n${reply.text}` : reply.text;
-  await deliver(ctx, { ...reply, text: shown, spoken: reply.spoken ?? reply.text, voice: reply.voice || isAudio });
+  await deliver(ctx, { ...reply, text: shown, spoken: reply.spoken ?? reply.text, voice: isAudio });
 
   if (reply.autoTipTopic) {
     const tip = await autoTip(ctx, reply.autoTipTopic);

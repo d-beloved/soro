@@ -70,6 +70,8 @@ export interface Repo {
   /** Returns the new row id, or null if this WhatsApp message was already processed (webhook retry). */
   insertInbound(row: { wa_message_id: string; user_id: string; type: string; language: Lang | null }): Promise<string | null>;
   updateMessage(id: string, patch: MessagePatch): Promise<void>;
+  /** When we last handled one of this user's messages with this intent. */
+  lastIntentAt(userId: string, intent: string): Promise<Date | null>;
   insertOutbound(row: { user_id: string; type: string; language: Lang; payload?: unknown }): Promise<void>;
   insertTransaction(row: {
     user_id: string;
@@ -160,6 +162,20 @@ export function createRepo(url: string, serviceRoleKey: string): Repo {
 
     async updateMessage(id, patch) {
       check(await db.from("messages").update(patch).eq("id", id));
+    },
+
+    async lastIntentAt(userId, intent) {
+      const row = check(
+        await db
+          .from("messages")
+          .select("created_at")
+          .eq("user_id", userId)
+          .eq("intent", intent)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ) as { created_at: string } | null;
+      return row ? new Date(row.created_at) : null;
     },
 
     async insertOutbound(row) {
