@@ -148,6 +148,8 @@ export function fakeWa() {
 
 export function fakeEngine(routeResult: unknown = { intent: "unknown" }, transcript = "I sell 3 bags of rice 75k") {
   const calls: string[] = [];
+  /** What each voice reply said. */
+  const spoken: string[] = [];
   const engine: EngineApi & { routeResult: unknown } = {
     routeResult,
     async transcribe() {
@@ -165,12 +167,13 @@ export function fakeEngine(routeResult: unknown = { intent: "unknown" }, transcr
     async translate(text) {
       return text;
     },
-    async speak() {
+    async speak(text) {
       calls.push("speak");
+      spoken.push(text);
       return new Uint8Array([0x4f, 0x67, 0x67, 0x53]);
     },
   };
-  return { engine, calls };
+  return { engine, calls, spoken };
 }
 
 export function makeDeps(overrides: Partial<Deps> = {}) {

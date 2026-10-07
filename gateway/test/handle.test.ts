@@ -4,7 +4,7 @@ import { FAKE_NOW, makeDeps, pick, PHONE, tap, text, voice } from "./fakes.js";
 
 async function onboarded(lang = "lang_en") {
   const t = makeDeps();
-  await handleMessage(t.deps, text("Hi SoroEngine [OSHODI]"));
+  await handleMessage(t.deps, text("Hi Sọ̀rọ̀ [OSHODI]"));
   await handleMessage(t.deps, tap("consent_yes"));
   await handleMessage(t.deps, pick(lang));
   t.sent.length = 0;
@@ -15,7 +15,7 @@ async function onboarded(lang = "lang_en") {
 describe("onboarding", () => {
   it("asks for consent first and records the referral tag, never the phone number", async () => {
     const { deps, sent, state } = makeDeps();
-    await handleMessage(deps, text("Hi SoroEngine [OSHODI]"));
+    await handleMessage(deps, text("Hi Sọ̀rọ̀ [OSHODI]"));
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ kind: "buttons", ids: ["consent_yes", "consent_no"] });
     expect(sent[0]!.body).toContain("https://soro.charavol.com/privacy");
@@ -72,6 +72,25 @@ describe("commerce", () => {
     const row = t.state.messages.at(-1);
     expect(row).toMatchObject({ intent: "log_sale", transcript: "I sell 3 bags of rice 75k", audio_seconds: 4.2, language: "en" });
     expect(row.latency_ms).toBeTypeOf("number");
+  });
+
+  it("speaks only the headline of a reply, never the transcript echo", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_expense", item: "data", amount_ngn: 2500, category: "data_airtime" };
+    await handleMessage(t.deps, voice());
+    expect(t.spoken).toEqual(["✅ Spent: data — ₦2,500 (data & airtime)."]);
+  });
+
+  it("speaks a short summary: totals only", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_income", item: "salary", amount_ngn: 1000000 };
+    await handleMessage(t.deps, text("My salary don enter 1m"));
+    t.engine.routeResult = { intent: "log_expense", amount_ngn: 2500, category: "data_airtime" };
+    await handleMessage(t.deps, text("data 2500"));
+    t.engine.routeResult = { intent: "summary_query", period: "today" };
+    await handleMessage(t.deps, voice());
+    expect(t.spoken).toEqual(["Your money today. Money in ₦1,000,000, spent ₦2,500."]);
+    expect(t.sent.at(-2)!.body).toContain("Type SHARE");
   });
 
   it("asks for the amount instead of guessing", async () => {
@@ -238,7 +257,7 @@ describe("sharing", () => {
     expect(t.sent[0]!.body).toContain("joined with your link so far: 0");
 
     // a friend arrives through the link and consents
-    const friend = { ...text(`Hi SoroEngine [${code}]`), from: "2348099999999" };
+    const friend = { ...text(`Hi Sọ̀rọ̀ [${code}]`), from: "2348099999999" };
     await handleMessage(t.deps, friend);
     await handleMessage(t.deps, { ...tap("consent_yes"), from: "2348099999999" });
     t.sent.length = 0;

@@ -225,9 +225,13 @@ async function summarise(ctx: Ctx, period: "today" | "week" | "month"): Promise<
   const periodLabel = t(lang, `period_${period}`);
   const sections: string[] = [];
 
+  // The voice note says the totals only; the text carries the detail.
+  const spoken: string[] = [t(lang, "summary_spoken_title", { period: periodLabel })];
+
   const sales = totalOf(rows, "sale");
   const costs = sumOf(rows, isBusinessCost);
   if (sales > 0 || costs > 0) {
+    spoken.push(t(lang, "summary_spoken_business", { sales: formatNaira(sales), costs: formatNaira(costs) }));
     sections.push(
       t(lang, "summary_business", {
         sales: formatNaira(sales),
@@ -241,6 +245,7 @@ async function summarise(ctx: Ctx, period: "today" | "week" | "month"): Promise<
   const income = totalOf(rows, "income");
   const spent = sumOf(rows, isPersonalSpend);
   if (income > 0 || spent > 0) {
+    spoken.push(t(lang, "summary_spoken_personal", { income: formatNaira(income), spent: formatNaira(spent) }));
     const byCategory = new Map<string, number>();
     for (const r of rows.filter(isPersonalSpend)) byCategory.set(r.category ?? "other", (byCategory.get(r.category ?? "other") ?? 0) + r.total);
     const top = [...byCategory]
@@ -256,6 +261,12 @@ async function summarise(ctx: Ctx, period: "today" | "week" | "month"): Promise<
   const owedToMe = people.filter((p) => p.toMe > 0).sort((a, b) => b.toMe - a.toMe);
   const iOwe = people.filter((p) => p.iOwe > 0).sort((a, b) => b.iOwe - a.iOwe);
   if (owedToMe.length > 0 || iOwe.length > 0) {
+    spoken.push(
+      t(lang, "summary_spoken_debts", {
+        owed_to_me: formatNaira(owedToMe.reduce((a, p) => a + p.toMe, 0)),
+        i_owe: formatNaira(iOwe.reduce((a, p) => a + p.iOwe, 0)),
+      }),
+    );
     const names = (list: typeof people, pick: (p: (typeof people)[number]) => number) =>
       list.length === 0 ? "" : ` (${list.slice(0, 3).map((p) => `${p.name ?? t(lang, "someone")} ${formatNaira(pick(p))}`).join(", ")})`;
     sections.push(
@@ -267,6 +278,6 @@ async function summarise(ctx: Ctx, period: "today" | "week" | "month"): Promise<
   }
 
   if (sections.length === 0) return { text: t(lang, "summary_empty", { period: periodLabel }), voice: true };
-  const spoken = [t(lang, "summary_title", { period: periodLabel }), ...sections].join("\n\n");
-  return { text: `${spoken}\n\n${t(lang, "summary_share")}`, spoken, voice: true, autoTipTopic: "cash_flow" };
+  const text = [t(lang, "summary_title", { period: periodLabel }), ...sections, t(lang, "summary_share")].join("\n\n");
+  return { text, spoken: spoken.join(" "), voice: true, autoTipTopic: "cash_flow" };
 }

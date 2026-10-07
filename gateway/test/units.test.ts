@@ -62,7 +62,7 @@ describe("time (WAT)", () => {
 });
 
 describe("parseRef", () => {
-  it("reads the tag from a wa.me prefill", () => expect(parseRef("Hi SoroEngine [oshodi_1]")).toBe("OSHODI_1"));
+  it("reads the tag from a wa.me prefill", () => expect(parseRef("Hi Sọ̀rọ̀ [oshodi_1]")).toBe("OSHODI_1"));
   it("ignores text without a tag", () => expect(parseRef("I sell rice 5k")).toBeNull());
 });
 

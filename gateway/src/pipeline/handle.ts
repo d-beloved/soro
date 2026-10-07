@@ -129,7 +129,7 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   if (command === "share") {
     out.intent = "share";
     const code = shareCode(user.id);
-    const link = `https://wa.me/${deps.publicNumber}?text=${encodeURIComponent(`Hi SoroEngine [${code}]`)}`;
+    const link = `https://wa.me/${deps.publicNumber}?text=${encodeURIComponent(`Hi Sọ̀rọ̀ [${code}]`)}`;
     const count = await deps.repo.countReferrals(code);
     await deliver(ctx, { text: t(ctx.lang, "share_intro", { count }), voice: false });
     // A separate message, so it can be forwarded as it is.
@@ -182,7 +182,7 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   // Echo what we heard so the trader can catch transcription mistakes.
   // Voice notes get a voice reply; text gets text only, so nobody waits on TTS they didn't ask for.
   const shown = isAudio ? `${t(ctx.lang, "heard", { transcript: input })}\n\n${reply.text}` : reply.text;
-  await deliver(ctx, { ...reply, text: shown, spoken: reply.spoken ?? reply.text, voice: isAudio });
+  await deliver(ctx, { ...reply, text: shown, spoken: reply.spoken ?? firstLine(reply.text), voice: isAudio });
 
   if (reply.autoTipTopic) {
     const tip = await autoTip(ctx, reply.autoTipTopic);
@@ -194,6 +194,14 @@ async function sendLanguagePicker(ctx: Ctx): Promise<void> {
   await ctx.deps.wa.sendList(ctx.msg.from, LANGUAGE_PROMPT, t("en", "language_button"), LANGUAGE_ROWS);
 }
 
+/**
+ * The voice note says only the headline (the first line, unless the reply sets `spoken`): long notes take
+ * YarnGPT a minute and come out muddled, and the full detail is already in the text.
+ */
+function firstLine(text: string): string {
+  return text.split("\n", 1)[0]!;
+}
+
 /** Text first (instant), then the voice note (slower), so nobody waits on TTS. */
 async function deliver(ctx: Ctx, reply: Reply): Promise<void> {
   const { deps } = ctx;
@@ -203,7 +211,7 @@ async function deliver(ctx: Ctx, reply: Reply): Promise<void> {
   let audioSent = false;
   if (reply.voice && deps.voiceReplies) {
     try {
-      const ogg = await deps.engine.speak(reply.spoken ?? reply.text, ctx.lang);
+      const ogg = await deps.engine.speak(reply.spoken ?? firstLine(reply.text), ctx.lang);
       await deps.wa.sendVoice(ctx.msg.from, ogg);
       await deps.repo.insertOutbound({ user_id: ctx.user.id, type: "audio", language: ctx.lang });
       audioSent = true;

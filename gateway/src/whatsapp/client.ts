@@ -80,7 +80,7 @@ export function createWhatsAppClient(opts: Options): WhatsAppApi {
           body: { text: body },
           action: {
             button: buttonLabel.slice(0, 20),
-            sections: [{ title: "SoroEngine", rows: rows.slice(0, 10).map((r) => ({ ...r, title: r.title.slice(0, 24) })) }],
+            sections: [{ title: "Sọ̀rọ̀", rows: rows.slice(0, 10).map((r) => ({ ...r, title: r.title.slice(0, 24) })) }],
           },
         },
       }),
