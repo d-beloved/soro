@@ -7,7 +7,7 @@ People send a voice note or text in English, Pidgin, Yoruba, Hausa or Igbo about
 - **Small businesses** (traders, artisans, food sellers, riders): sales or paid work, business costs, stock counts, debts and repayments, loan requests.
 - **Everyone:** money tips as text, fix the last amount ("no be 5k, na 50k") or type `UNDO`; `SHARE` sends a forwardable invite link that carries the user's own referral code.
 
-Built for the NITDA / NCAIR **National AI Champions (NAIC) 2026**, Voice-First track. The plan is in [PLAN.md](PLAN.md).
+Built for the NITDA / NCAIR **National AI Champions (NAIC) 2026**, Voice-First track.
 
 ## How it fits together
 
@@ -49,7 +49,7 @@ Requirements: Node 22, [uv](https://docs.astral.sh/uv/), ffmpeg (`brew install f
 cd gateway
 npm install
 cp .env.example .env      # fill it in
-npm test                  # 53 tests
+npm test                  # 57 tests
 npm run typecheck
 npm run dev               # http://localhost:3000
 ```
@@ -64,7 +64,7 @@ uv sync                           # light deps, enough for tests
 uv run pytest                     # 48 tests
 ```
 
-To run the models locally (Apple Silicon Mac: ASR and LLM work; TTS is CPU-only and slow, so set `VOICE_REPLIES=off` in the gateway):
+To run the models locally (on an Apple Silicon Mac, ASR and the LLM work; TTS is CPU-only and slow, so set `VOICE_REPLIES=off` in the gateway):
 
 ```bash
 uv sync --extra ml
@@ -92,10 +92,10 @@ node scripts/serve_site.mjs       # http://localhost:4321
    uv run --with modal modal run modal_app.py::setup_models
    uv run --with modal modal deploy modal_app.py
    ```
-   The deploy prints the engine URL. Containers scale to zero. During Oct 7–11 a cron keeps one warm from 09:00 to 21:00 WAT. Use `modal run modal_app.py::warm --on` or `--no-on` to override.
-3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (with `ENGINE_URL` set to the Modal URL, and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so an UptimeRobot monitor pings `/health` every 5 minutes. Live at `https://<your-gateway>`.
+   The deploy prints the engine URL. Containers scale to zero; a cron in `modal_app.py` keeps one warm during daytime hours (WAT). Use `modal run modal_app.py::warm --on` or `--no-on` to override.
+3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (with `ENGINE_URL` set to the Modal URL, and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
 4. **Meta webhook:** set the callback URL to `https://<your-gateway>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
-5. **Site on Cloudflare Pages** (project `soroengine`, custom domain `soro.charavol.com`). It isn't connected to Git, so deploy by hand: `npx wrangler pages deploy site --project-name soroengine --branch main`.
+5. **Site on Cloudflare Pages:** `npx wrangler pages deploy site --project-name <your-project> --branch main`.
 
 ## Scripts
 
