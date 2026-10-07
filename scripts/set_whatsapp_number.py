@@ -1,4 +1,4 @@
-"""Puts the SoroEngine WhatsApp number into the site and regenerates the QR code.
+"""Puts the Sọ̀rọ̀ WhatsApp number into the site and regenerates the QR code.
 
   uv run --with qrcode python scripts/set_whatsapp_number.py 2348012345678
   uv run --with qrcode python scripts/set_whatsapp_number.py --placeholder   # QR to the website until the number exists
@@ -41,7 +41,7 @@ def main() -> None:
         if PLACEHOLDER in text:
             page.write_text(text.replace(PLACEHOLDER, a.number))
             print("updated", page.name)
-    write_qr(f"https://wa.me/{a.number}?text=Hi%20SoroEngine%20%5BQR%5D")
+    write_qr(f"https://wa.me/{a.number}?text=Hi%20S%E1%BB%8D%CC%80r%E1%BB%8D%CC%80%20%5BQR%5D")
 
 
 if __name__ == "__main__":

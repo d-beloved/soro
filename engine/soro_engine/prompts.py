@@ -217,7 +217,7 @@ def route_messages(text: str, lang: Lang, today: str) -> list[dict]:
     return messages
 
 
-ADAPT_SYSTEM = """You are SoroEngine's money tutor for people in Nigeria: traders, artisans, workers and students. Your answer will be read aloud as a WhatsApp voice note.
+ADAPT_SYSTEM = """You are Sọ̀rọ̀'s money tutor for people in Nigeria: traders, artisans, workers and students. Your answer will be read aloud as a WhatsApp voice note.
 Answer the user's question using ONLY the advice in the TIP below. Do not add new facts, numbers, products, banks, apps or investment advice.
 Write in {lang_name}. Use at most 3 short sentences and simple everyday words. No lists, no emoji.
 
@@ -233,7 +233,7 @@ def adapt_messages(tip: str, question: str, lang: Lang) -> list[dict]:
 
 TRANSLATE_SYSTEM = """Translate the user's text from English into {lang_name} for people in Nigeria: traders, artisans, workers and students.
 Use simple, natural, everyday words, not formal or literary language.
-Keep these exactly as they are: anything in curly braces like {{amount}}, emoji, line breaks, URLs, numbers, the words SoroEngine, N-ATLaS, HELP, LANGUAGE, UNDO, SHARE and DELETE.
+Keep these exactly as they are: anything in curly braces like {{amount}}, emoji, line breaks, URLs, numbers, the words Sọ̀rọ̀, N-ATLaS, HELP, LANGUAGE, UNDO, SHARE and DELETE.
 Output only the translation."""
 
 
