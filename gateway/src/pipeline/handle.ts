@@ -8,7 +8,7 @@ import { applyCommerce } from "./commerce.js";
 import type { Ctx, Deps, Reply } from "./context.js";
 import { answerQuestion, autoTip } from "./tutor.js";
 
-/** What we learned about the inbound message, written back to its row (and so to the NAIC export). */
+/** What we learned about the inbound message, written back to its row (and so to the interaction log). */
 interface Outcome {
   intent?: string;
   payload?: unknown;

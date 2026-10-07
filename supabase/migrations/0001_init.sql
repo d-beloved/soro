@@ -101,8 +101,8 @@ language sql stable as $$
   group by kind
 $$;
 
--- NAIC validation export: one row per inbound interaction.
-create or replace view naic_interactions as
+-- Interaction log export: one row per inbound message.
+create or replace view interaction_log as
 select
   m.id                      as interaction_id,
   u.id                      as user_id,
@@ -127,8 +127,8 @@ left join tip_deliveries td on td.message_id = m.id
 where m.direction = 'in'
 order by m.created_at;
 
--- Daily pilot counter for the dashboard / video.
-create or replace view pilot_stats as
+-- Usage counters for the dashboard.
+create or replace view usage_stats as
 select
   (select count(*) from users where consent_at is not null)        as consented_users,
   (select count(distinct user_id) from messages where direction = 'in') as active_users,

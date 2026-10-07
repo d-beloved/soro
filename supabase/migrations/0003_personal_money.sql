@@ -7,7 +7,7 @@ alter type txn_kind add value if not exists 'debt_i_paid';
 
 -- Spending category ('goods' and 'business_costs' are business; the rest are personal).
 alter table transactions add column if not exists category text;
--- Set by UNDO. Voided rows stay for the NAIC log but drop out of every total.
+-- Set by UNDO. Voided rows stay in the interaction log but drop out of every total.
 alter table transactions add column if not exists voided_at timestamptz;
 
 create table if not exists budgets (
@@ -42,7 +42,7 @@ language sql stable as $$
   group by lower(trim(counterparty)), kind
 $$;
 
-create or replace view naic_interactions as
+create or replace view interaction_log as
 select
   m.id                      as interaction_id,
   u.id                      as user_id,

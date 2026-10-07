@@ -17,7 +17,7 @@ import modal
 APP_NAME = "soroengine"
 MODELS = "/models"
 
-# Warm window for the pilot: one container kept up 09:00-21:00 WAT on these dates only
+# Warm window: one container kept up 09:00-21:00 WAT on these dates only
 # (T4 ~$0.59/h -> ~$7/day). Outside the window the engine scales to zero and cold-starts on demand.
 WARM_FROM = "2026-10-07"
 WARM_TO = "2026-10-11"
@@ -73,7 +73,7 @@ def setup_models(allow_community_gguf: bool = False):
     secrets=[secret],
     scaledown_window=300,  # stay warm 5 min after the last message
     min_containers=0,
-    max_containers=1,  # 1,000-user licence cap + budget: one GPU is plenty for the pilot
+    max_containers=1,  # 1,000-user licence cap + budget: one GPU is plenty for now
     timeout=600,
 )
 @modal.concurrent(max_inputs=8)

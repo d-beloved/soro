@@ -1,7 +1,7 @@
 """Prompts for N-ATLaS. Router output is constrained to ROUTER_SCHEMA by llama.cpp's JSON grammar.
 
 The yo/ha/ig few-shot examples are first drafts: have a native speaker check them
-(and swap in real phrasings from pilot voice notes) before the demo.
+and swap in real phrasings from users' voice notes.
 """
 
 from __future__ import annotations
