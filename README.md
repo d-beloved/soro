@@ -1,11 +1,11 @@
-# SoroEngine
+# Sọ̀rọ̀
 
-A voice-first WhatsApp assistant for Nigerian informal traders, by Charavol Technologies Ltd.
+A voice-first WhatsApp money assistant for people in Nigeria, by Charavol Technologies Ltd. Sọ̀rọ̀ means "talk" in Yorùbá. SoroEngine is the code name of the back end (the engine and gateway in this repo, and their service URLs).
 
-People send a voice note or text in English, Pidgin, Yoruba, Hausa or Igbo. SoroEngine keeps their money book and shares short money tips, as text and as a voice reply:
-- **Small businesses** (traders, artisans, food sellers, riders): sales or paid work, business costs, stock counts, debts and repayments, summaries, loan requests.
-- **Personal money** (workers, students): spending by category, money in, monthly budgets, money lent and repaid.
-- **Everyone:** fix the last amount ("no be 5k, na 50k") or type `UNDO`; `SHARE` sends a forwardable invite link that carries the user's own referral code.
+People send a voice note or text in English, Pidgin, Yoruba, Hausa or Igbo about what they spend, earn, sell or lend. Sọ̀rọ̀ keeps the record and tells them where their money went. A voice note gets a short spoken reply as well as the text:
+- **Personal money** (workers, students): spending by category, money in, monthly budgets, money lent and repaid, summaries.
+- **Small businesses** (traders, artisans, food sellers, riders): sales or paid work, business costs, stock counts, debts and repayments, loan requests.
+- **Everyone:** money tips as text, fix the last amount ("no be 5k, na 50k") or type `UNDO`; `SHARE` sends a forwardable invite link that carries the user's own referral code.
 
 Built for the NITDA / NCAIR **National AI Champions (NAIC) 2026**, Voice-First track. The plan is in [PLAN.md](PLAN.md).
 
@@ -15,7 +15,7 @@ Built for the NITDA / NCAIR **National AI Champions (NAIC) 2026**, Voice-First t
 WhatsApp user
    │  voice note / text
    ▼
-Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on Railway)
+Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on Render)
                                       │  consent, routing, commerce, tutor, replies
                                       ├──▶ Supabase Postgres (EU)        supabase/
                                       └──▶ engine/  (FastAPI on Modal, T4 GPU)
@@ -93,9 +93,9 @@ node scripts/serve_site.mjs       # http://localhost:4321
    uv run --with modal modal deploy modal_app.py
    ```
    The deploy prints the engine URL. Containers scale to zero. During Oct 7–11 a cron keeps one warm from 09:00 to 21:00 WAT. Use `modal run modal_app.py::warm --on` or `--no-on` to override.
-3. **Gateway on Railway:** create a new project from the GitHub repo, set the root directory to `gateway` and the config file path to `/gateway/railway.json` (Railway doesn't look for it under the root directory), and add every variable from `.env.example`, with `ENGINE_URL` set to the Modal URL. `railway.json` sets the build, the start command and the `/health` check.
-4. **Meta webhook:** set the callback URL to `https://<railway-domain>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
-5. **Site on Cloudflare Pages:** no build command, output directory `site`, custom domain `soro.charavol.com`.
+3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (with `ENGINE_URL` set to the Modal URL, and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so an UptimeRobot monitor pings `/health` every 5 minutes. Live at `https://<your-gateway>`.
+4. **Meta webhook:** set the callback URL to `https://<your-gateway>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
+5. **Site on Cloudflare Pages** (project `soroengine`, custom domain `soro.charavol.com`). It isn't connected to Git, so deploy by hand: `npx wrangler pages deploy site --project-name soroengine --branch main`.
 
 ## Scripts
 

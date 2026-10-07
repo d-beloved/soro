@@ -2,7 +2,7 @@
 
   uv run --with qrcode python scripts/set_whatsapp_number.py 2348012345678
   uv run --with qrcode python scripts/set_whatsapp_number.py --placeholder   # QR to the website until the number exists
-Then commit and redeploy the site (Cloudflare Pages redeploys on push).
+Then commit and redeploy the site: npx wrangler pages deploy site --project-name soroengine --branch main
 """
 
 from __future__ import annotations
