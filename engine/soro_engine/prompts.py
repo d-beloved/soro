@@ -90,7 +90,7 @@ def needs_category(result: dict) -> bool:
     return result.get("intent") in CATEGORY_INTENTS and result.get("category") is None
 
 
-ROUTER_SYSTEM = """You are the message router for SoroEngine, a WhatsApp money-records and money-tips assistant for people in Nigeria:
+ROUTER_SYSTEM = """You are the message router for Sọ̀rọ̀, a WhatsApp money-records and money-tips assistant for people in Nigeria:
 market traders, artisans and other small businesses, and also workers and students tracking their personal money.
 Today is {today}. The user speaks {lang_name}; the message may also mix English, Pidgin, Yoruba, Hausa or Igbo.
 Messages are often voice-note transcripts, so expect missing punctuation and spelling mistakes.
