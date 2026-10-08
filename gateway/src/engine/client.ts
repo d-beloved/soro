@@ -13,7 +13,6 @@ export interface EngineApi {
   route(text: string, lang: Lang, today: string): Promise<unknown>;
   /** Rewrites a curated tip so it answers the trader's question, in their language. */
   adapt(input: { tip: string; question: string; lang: Lang }): Promise<string>;
-  translate(text: string, target: Lang): Promise<string>;
   /** OGG/OPUS bytes ready for a WhatsApp voice note. */
   speak(text: string, lang: Lang): Promise<Uint8Array<ArrayBuffer>>;
 }
@@ -64,9 +63,6 @@ export function createEngineClient(opts: Options): EngineApi {
     },
     async adapt(input) {
       return (await json("/adapt", input)).text;
-    },
-    async translate(text, target) {
-      return (await json("/translate", { text, target })).text;
     },
     async speak(text, lang) {
       const res = await post("/speak", JSON.stringify({ text, lang }), "application/json");

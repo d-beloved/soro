@@ -1,0 +1,152 @@
+{
+  "separate_money_01": {
+    "yo": "Ya owó ṣọ́ọ̀bù sọ́tọ̀ kúrò lára owó ilé. Àpò owó méjì ọ̀tọ̀ọ̀tọ̀ pàápàá ń ṣèrànwọ́. Tí o bá dà wọ́n pọ̀, o kò ní mọ̀ bóyá òwò rẹ ń jèrè.",
+    "ha": "Ku ajiye kuɗin shago da kuɗin gida a wurare daban. Ko jakar kuɗi biyu ma za ta taimaka. Idan kuka haɗa su, ba za ku san ko kasuwancin na samun riba ba.",
+    "ig": "Debe ego ụlọ ahịa na ego ụlọ n'ebe dị iche iche. Ọbụna akpa ego abụọ dị iche na-enye aka. Ọ bụrụ na i gwakọta ha, ị gaghị ama ma azụmahịa gị na-enweta uru."
+  },
+  "separate_money_02": {
+    "yo": "Máa san owó oṣù fún ara rẹ láti inú ṣọ́ọ̀bù: iye kan náà lọ́sẹ̀ọ̀sẹ̀. Ìyókù yóò wà nínú òwò kí ó lè dàgbà.",
+    "ha": "Ku riƙa biyan kanku adadi ɗaya kowane mako daga shago, kamar albashi. Sauran kuɗin su zauna a kasuwanci don ya bunƙasa.",
+    "ig": "Kwụọ onwe gị otu ego kwa izu site n'ụlọ ahịa, dị ka ụgwọ ọnwa. Ego fọdụrụ ga-anọ n'azụmahịa ka o wee too."
+  },
+  "separate_money_03": {
+    "yo": "Ṣí àkáǹtì tàbí wallet ọ̀tọ̀ fún òwò nìkan. Tí àwọn oníbàárà bá fi owó ránṣẹ́, ibẹ̀ ni yóò bọ́ sí, kì í ṣe sínú àkáǹtì ti ara rẹ.",
+    "ha": "Ku buɗe asusu ko wallet na daban don kasuwanci kawai. Idan kwastomomi suka tura kuɗi, can zai shiga, ba asusunku na kanku ba.",
+    "ig": "Mepee akaụntụ ma ọ bụ wallet dị iche maka naanị azụmahịa. Mgbe ndị ahịa zitere ego, ọ ga-abanye ebe ahụ, ọ bụghị n'akaụntụ nke onwe gị."
+  },
+  "separate_money_04": {
+    "yo": "Kí o tó mú owó nínú ṣọ́ọ̀bù fún ìnáwó ilé, kọ ọ́ sílẹ̀ pé \"olówó ṣọ́ọ̀bù mú\". Ní òpin oṣù, wàá rí iye tí ilé ń jẹ nínú òwò rẹ.",
+    "ha": "Kafin ku ɗauki kuɗi daga shago don bukatun iyali, ku rubuta \"mai shago ya ɗauka\". A ƙarshen wata za ku ga yawan abin da gida ke ci daga kasuwanci.",
+    "ig": "Tupu i were ego n'ụlọ ahịa maka mkpa ezinụlọ, dee ya dị ka \"onye nwe ahịa weere\". N'ọgwụgwụ ọnwa, ị ga-ahụ ego ole ụlọ na-eri n'azụmahịa."
+  },
+  "separate_money_05": {
+    "yo": "Ọjà rẹ kì í ṣe owó ìpamọ́ rẹ. Ọjà orí pẹpẹ jẹ́ owó òwò. Má ṣe kà wọ́n mọ́ owó tí o lè ná fún ara rẹ.",
+    "ha": "Kayan shagonku ba ajiyarku ba ne. Kayan da ke kan shiryayye kuɗin kasuwanci ne. Kada ku ƙirga su a matsayin kuɗin da za ku kashe wa kanku.",
+    "ig": "Ngwa ahịa gị abụghị ego nchekwa gị. Ngwa dị n'elu shelf bụ ego azụmahịa. Agụkọla ha dị ka ego ị ga-emefu maka onwe gị."
+  },
+  "record_keeping_01": {
+    "yo": "Kọ gbogbo ọjà tí o tà sílẹ̀ lọ́jọ́ náà, kódà àwọn kéékèèké. Àwọn ọjà kékeré tí o gbàgbé máa ń di owó ńlá tí o kò ní lè ṣàlàyé.",
+    "ha": "Ku rubuta kowane ciniki a ranar da aka yi shi, har ƙanana. Ƙananan cinikin da kuka manta suna taruwa su zama kuɗi mai yawa da ba za ku iya bayaninsa ba.",
+    "ig": "Dee ahịa ọ bụla n'ụbọchị ahụ, ọbụna ndị pere mpe. Obere ahịa ị chefuru na-agbakọ ghọọ nnukwu ego ị na-agaghị enwe ike ịkọwa."
+  },
+  "record_keeping_02": {
+    "yo": "Kọ ohun tí o ná lórí òwò sílẹ̀ pẹ̀lú: owó ọkọ̀, ọ̀rá, owó ṣọ́ọ̀bù, owó ìjọba. Èrè ni ọjà tí o tà yọ gbogbo ìnáwó yìí, kì í ṣe ọjà tí o tà nìkan.",
+    "ha": "Ku rubuta abin da kuke kashewa a kasuwanci ma: kuɗin mota, leda, haya, haraji. Riba ita ce ciniki ban da duk waɗannan kuɗaɗe, ba ciniki kaɗai ba.",
+    "ig": "Dekwaa ihe ị na-emefu n'azụmahịa: ụgwọ ụgbọ, akpa naịlọn, ụgwọ ụlọ, ụtụ. Uru bụ ahịa wepụ mmefu ndị a niile, ọ bụghị naanị ahịa."
+  },
+  "record_keeping_03": {
+    "yo": "Yẹ àkọsílẹ̀ rẹ wò ní òpin ọ̀sẹ̀ kọ̀ọ̀kan. Ọjà wo ló tà jù? Ra púpọ̀ sí i nínú wọn, kí o sì dín èyí tí kò tà kù.",
+    "ha": "Ku duba rikodinku a ƙarshen kowane mako. Wane kaya ne ya fi saurin tafiya? Ku ƙara sayen irinsu, ku rage sayen wanda ba ya tafiya.",
+    "ig": "Lelee ndekọ gị na njedebe izu ọ bụla. Kedu ngwa kacha ere ọsọ ọsọ? Zụtakwuo ha, zụtakwa obere n'ime ndị anaghị aga."
+  },
+  "record_keeping_04": {
+    "yo": "Àkọsílẹ̀ tó dára ni CV òwò rẹ. Àwọn báǹkì àti ẹgbẹ́ alájùmọ̀ṣepọ̀ máa ń wò ó kí wọ́n tó yá ọ lówó.",
+    "ha": "Rikodi mai kyau shi ne CV na kasuwancinku. Bankuna da ƙungiyoyin haɗin gwiwa suna duba shi kafin su ba ku rance.",
+    "ig": "Ezigbo ndekọ bụ CV azụmahịa gị. Ụlọ akụ na otu cooperative na-elele ya tupu ha agbazinye gị ego."
+  },
+  "record_keeping_05": {
+    "yo": "Ka owó rẹ ní ìparí ọjọ́, kí o sì fi wé ohun tí o kọ sílẹ̀. Tí wọn kò bá dọ́gba, wádìí ìdí rẹ̀ ní kíákíá.",
+    "ha": "Ku ƙirga kuɗinku a ƙarshen rana, ku kwatanta da abin da kuka rubuta. Idan ba su yi daidai ba, ku nemi dalili da wuri.",
+    "ig": "Gụọ ego gị na njedebe ụbọchị, tụnyere ya na ihe i dere. Ọ bụrụ na ha adabaghị, chọpụta ihe kpatara ya ngwa ngwa."
+  },
+  "cash_flow_01": {
+    "yo": "Ìṣàn owó ni owó tó ń wọlé ní ìfiwéra pẹ̀lú èyí tó ń jáde lọ́sẹ̀ọ̀sẹ̀. Ṣọ́ọ̀bù lè tà púpọ̀ kí owó ṣì tán lọ́wọ́ rẹ̀ tí owó bá ń jáde ju bó ṣe ń wọlé lọ.",
+    "ha": "Zagayowar kuɗi ita ce kuɗin da ke shigowa idan aka kwatanta da masu fita kowane mako. Shago na iya yin ciniki sosai amma kuɗi su ƙare idan suna fita fiye da yadda suke shigowa.",
+    "ig": "Mmegharị ego bụ ego na-abata ma e jiri ya tụnyere ego na-apụ kwa izu. Ụlọ ahịa nwere ike ire ọtụtụ ma ego ka gwụ ma ọ bụrụ na ego na-apụ ọsọ karịa ka ọ na-abata."
+  },
+  "cash_flow_02": {
+    "yo": "Mọ àwọn ọjọ́ àti oṣù tí ọjà kì í tà dáadáa. Fi owó díẹ̀ pamọ́ nígbà tí ọjà bá ń tà, kí o lè ra ọjà padà nígbà tí títà bá dín kù.",
+    "ha": "Ku san ranaku da watannin da ciniki ke sanyi. Ku ajiye wasu kuɗi lokacin da ciniki ke tafiya, don ku iya sake sayen kaya lokacin da ciniki ya ragu.",
+    "ig": "Mara ụbọchị na ọnwa ahịa anaghị aga nke ọma. Debe ego ụfọdụ mgbe ahịa na-aga, ka i wee nwee ike ịzụta ngwa ọzọ mgbe ahịa dara."
+  },
+  "cash_flow_03": {
+    "yo": "Má ṣe ná gbogbo owó rẹ láti ra ọjà ńlá kan ṣoṣo. Fi owó díẹ̀ sílẹ̀ fún owó ṣọ́ọ̀bù, owó ìjọba àti ìṣòro òjijì.",
+    "ha": "Kada ku kashe duk kuɗinku wajen sayen babban kaya guda ɗaya. Ku bar ɗan kuɗi don haya, haraji da abubuwan gaggawa.",
+    "ig": "Ejila ego gị niile zụta otu nnukwu ngwa. Hapụ obere ego maka ụgwọ ụlọ, ụtụ na ihe mberede."
+  },
+  "cash_flow_04": {
+    "yo": "Ìnáwó ńlá ń bọ̀, bíi owó ṣọ́ọ̀bù tàbí owó ilé-ìwé? Pín in sí iye ọ̀sẹ̀ tó kù, kí o sì máa fi iye yẹn pamọ́ lọ́sẹ̀ọ̀sẹ̀.",
+    "ha": "Akwai babban kashe kuɗi da ke tafe, kamar haya ko kuɗin makaranta? Ku raba shi da adadin makonnin da suka rage, ku riƙa ajiye wannan adadin kowane mako.",
+    "ig": "Nnukwu mmefu na-abịa, dị ka ụgwọ ụlọ ma ọ bụ ụgwọ akwụkwọ? Kee ya site n'ọnụ ọgụgụ izu fọdụrụ, wee na-edebe ego ahụ kwa izu."
+  },
+  "debt_recovery_01": {
+    "yo": "Kọ gbogbo ọjà tí o tà láwìn sílẹ̀: ta ni, èló ni, àti ìgbà tí wọ́n ṣèlérí láti san. Ìrántí kì í ṣe àkọsílẹ̀.",
+    "ha": "Ku rubuta kowane kayan da kuka bayar bashi: wa, nawa, da lokacin da aka yi alƙawarin biya. Tunawa ba rikodi ba ne.",
+    "ig": "Dee ngwa ọ bụla i rere n'ụgwọ: onye, ego ole, na mgbe o kwere nkwa ịkwụ. Icheta abụghị ndekọ."
+  },
+  "debt_recovery_02": {
+    "yo": "Ẹ fohùn ṣọ̀kan lórí ọjọ́ ìsanwó kí o tó fún ẹnikẹ́ni lọ́jà láwìn. \"Màá san án tó bá yá\" kì í ṣe ọjọ́.",
+    "ha": "Ku amince kan ranar biya a fili kafin ku ba da kaya bashi. \"Zan biya daga baya\" ba rana ba ce.",
+    "ig": "Kwekọrịta ụbọchị ịkwụ ụgwọ doro anya tupu i nye ngwa n'ụgwọ. \"M ga-akwụ ma emechaa\" abụghị ụbọchị."
+  },
+  "debt_recovery_03": {
+    "yo": "Rán wọn létí pẹ̀lú ọ̀wọ̀ ní ọjọ́ kan ṣáájú ọjọ́ ìsanwó. Ìránnilétí tútù máa ń gba owó padà ju ìpè ìbínú lẹ́yìn náà lọ.",
+    "ha": "Ku tunatar cikin ladabi kwana ɗaya kafin ranar biya. Tunatarwa mai daɗi na dawo da kuɗi fiye da kiran fushi daga baya.",
+    "ig": "Chetara ya n'ụzọ nsọpụrụ otu ụbọchị tupu ụbọchị ịkwụ ụgwọ. Ncheta nwere obi ọma na-eweghachi ego karịa oku iwe e mechara kpọọ."
+  },
+  "debt_recovery_04": {
+    "yo": "Ní òdiwọ̀n fún àwìn. Má ṣe fún ẹni tí kò tíì san àwìn àtijọ́ ní àwìn tuntun.",
+    "ha": "Ku sa iyaka ga bashi. Kada ku ba da sabon bashi ga wanda bai biya tsohon ba.",
+    "ig": "Nwee oke maka ụgwọ. Enyela onye na-akwụbeghị ụgwọ ochie ụgwọ ọhụrụ."
+  },
+  "credit_readiness_01": {
+    "yo": "Kí o tó yá owó, bi ara rẹ pé: ṣé owó yìí máa mú èrè wá ju èlé rẹ̀ lọ? Lo ẹ̀yáwó fún ọjà tó ń tà, kì í ṣe fún ìnáwó ojoojúmọ́.",
+    "ha": "Kafin ku karɓi rance, ku tambayi kanku: shin wannan kuɗi zai kawo riba fiye da kuɗin ruwa? Ku yi amfani da rance wajen sayen kayan da ke tafiya, ba don kashewar yau da kullum ba.",
+    "ig": "Tupu i were mbinye ego, jụọ onwe gị: ego a ọ ga-ewebata karịa ọmụrụ nwa ya? Jiri mbinye ego zụta ngwa na-ere, ọ bụghị maka mmefu kwa ụbọchị."
+  },
+  "credit_readiness_02": {
+    "yo": "Máa béèrè iye owó lápapọ̀ tí o máa san padà, kì í ṣe ìsanwó ọ̀sẹ̀ nìkan. Ìsanwó kékeré lọ́sẹ̀ọ̀sẹ̀ lè fi owó ńlá pa mọ́.",
+    "ha": "Ku riƙa tambayar jimillar kuɗin da za ku biya, ba biyan mako-mako kawai ba. Ƙananan biyan mako-mako na iya ɓoye tsada mai yawa.",
+    "ig": "Na-ajụ mgbe niile ngụkọta ego ị ga-akwụghachi, ọ bụghị naanị ịkwụ ụgwọ kwa izu. Obere ịkwụ ụgwọ kwa izu nwere ike izo nnukwu ọnụ ahịa."
+  },
+  "credit_readiness_03": {
+    "yo": "Àwọn tó ń yáni lówó máa ń gbẹ́kẹ̀lé òwò tí àkọsílẹ̀ rẹ̀ dúró déédé. Àkọsílẹ̀ ọjà ojoojúmọ́ fún oṣù mẹ́ta máa ń mú ìbéèrè ẹ̀yáwó rẹ lágbára sí i.",
+    "ha": "Masu ba da rance sun fi amincewa da kasuwanci mai rikodi na yau da kullum. Rikodin ciniki na kowace rana na wata uku na ƙarfafa buƙatar rancenku sosai.",
+    "ig": "Ndị na-agbazinye ego na-atụkwasị azụmahịa nwere ndekọ na-aga n'usoro obi. Ndekọ ahịa kwa ụbọchị nke ọnwa atọ na-eme ka arịrịọ mbinye ego gị sikwuo ike."
+  },
+  "credit_readiness_04": {
+    "yo": "Yá owó lọ́wọ́ àwọn tí ìjọba fún ní ìwé àṣẹ nìkan. Ṣàyẹ̀wò pé loan app tàbí ayánilówó forúkọ sílẹ̀ kí o tó fún wọn ní àlàyé rẹ.",
+    "ha": "Ku karɓi rance daga masu lasisi kawai. Ku tabbatar an yi wa manhajar rance ko mai ba da rance rajista kafin ku ba da bayananku.",
+    "ig": "Gbaziri ego naanị n'aka ndị nwere ikike gọọmentị. Jide n'aka na loan app ma ọ bụ onye na-agbazinye ego debanyere aha tupu i nye ha nkọwa gị."
+  },
+  "savings_01": {
+    "yo": "Àjọ àti ẹ̀súsú ń ṣiṣẹ́ nítorí pé o ń fi iye kan náà pamọ́ déédé. Ṣe bẹ́ẹ̀ fún òwò rẹ: fi iye kékeré kan náà pamọ́ láti inú owó ọjà ojoojúmọ́.",
+    "ha": "Adashe na aiki ne domin kuna ajiye adadi ɗaya a kai a kai. Ku yi haka ga kasuwancinku: ku ajiye ɗan adadi ɗaya daga cinikin kowace rana.",
+    "ig": "Isusu na-arụ ọrụ n'ihi na ị na-echekwa otu ego mgbe niile. Mee otu ahụ maka azụmahịa gị: chekwaa obere ego n'otu n'otu site n'ahịa ụbọchị ọ bụla."
+  },
+  "savings_02": {
+    "yo": "Kọ́kọ́ fi owó pamọ́, lẹ́yìn náà ni kí o ná. Fi owó ìpamọ́ rẹ sọ́tọ̀ ní kété tí owó bá wọlé, kì í ṣe láti inú èyí tó ṣẹ́kù ní ìparí.",
+    "ha": "Ku fara ajiya, sannan ku kashe. Ku ware kuɗin ajiyarku da zarar kuɗi ya shigo, ba daga abin da ya rage a ƙarshe ba.",
+    "ig": "Buru ụzọ chekwaa, emesịa mefuo. Wepụta ego nchekwa gị ozugbo ego batara, ọ bụghị site n'ihe fọdụrụ na njedebe."
+  },
+  "savings_03": {
+    "yo": "Ní owó pàjáwìrì fún òwò rẹ. Jẹ́ kí ó tó láti san owó ṣọ́ọ̀bù oṣù kan àti láti ra ọjà padà.",
+    "ha": "Ku gina asusun gaggawa don kasuwanci. Ku yi burin samun abin da zai biya hayar wata ɗaya da sake sayen kaya.",
+    "ig": "Wulite ego mberede maka azụmahịa gị. Chọọ ka ọ ruo iji kwụọ ụgwọ ụlọ otu ọnwa na ịzụta ngwa ọzọ."
+  },
+  "savings_04": {
+    "yo": "Tí o bá darapọ̀ mọ́ ẹgbẹ́ àjọ, mọ àwọn ọmọ ẹgbẹ́ àti òfin wọn. Kọ gbogbo owó tí o bá san sílẹ̀.",
+    "ha": "Idan kun shiga ƙungiyar adashe, ku san membobinta da dokokinta. Ku rubuta kowane kuɗi da kuka saka.",
+    "ig": "Ọ bụrụ na i sonye n'otu isusu, mara ndị otu ya na iwu ya. Dee ego ọ bụla ị tinyere."
+  },
+  "pricing_01": {
+    "yo": "Láti dá iye lé ọjà, ṣírò iye tí o rà á pẹ̀lú owó ọkọ̀ àti ìnáwó mìíràn, lẹ́yìn náà fi èrè rẹ kún un. Má ṣe dá iye lé ọjà nítorí iye tí aládùúgbò rẹ ń tà nìkan.",
+    "ha": "Don sanya farashi, ku haɗa kuɗin da kuka sayi kayan da kuɗin mota da sauran kuɗaɗe, sannan ku ƙara ribarku a kai. Kada ku sanya farashi kawai bisa abin da maƙwabcinku ke sayarwa.",
+    "ig": "Iji tọọ ọnụ ahịa, gbakọọ ego i ji zụta ngwa ahụ na ụgwọ ụgbọ na mmefu ndị ọzọ, wee tinye uru gị n'elu ya. Etọla ọnụ ahịa naanị site n'ihe onye agbata obi gị na-ere."
+  },
+  "pricing_02": {
+    "yo": "Tí ẹni tó ń bá ọ kó ọjà bá fi owó kún un, tún iye tìrẹ wò kíákíá. Títà ní iye àtijọ́ lè sọ èrè di àdánù.",
+    "ha": "Idan mai kawo muku kaya ya ƙara farashi, ku duba naku farashin da sauri. Sayarwa a tsohon farashi na iya mayar da riba asara.",
+    "ig": "Mgbe onye na-ebutere gị ngwa bulitere ọnụ ahịa, lelee ọnụ ahịa nke gị ngwa ngwa. Iree n'ọnụ ahịa ochie nwere ike ime ka uru ghọọ mfu."
+  },
+  "pricing_03": {
+    "yo": "Mọ èrè tí o ń jẹ lórí ọjà kọ̀ọ̀kan. Ọjà tí kò wọ́n tó ń tà kíákíá lè mówó wọlé ju ọjà olówó ńlá tó jókòó sórí pẹpẹ.",
+    "ha": "Ku san ribar da kuke samu a kan kowane kaya. Kaya mai araha da ke tafiya da sauri na iya kawo kuɗi fiye da kaya mai tsada da ke zaune a shiryayye.",
+    "ig": "Mara uru ị na-enweta n'ngwa ọ bụla. Ngwa dị ọnụ ala na-ere ọsọ ọsọ nwere ike iweta ego karịa ngwa dị oke ọnụ nọ ọdụ n'elu shelf."
+  },
+  "pricing_04": {
+    "yo": "Ẹ̀dínwó ń ná ọ lówó. Ṣe é ní ìmọ̀ọ́mọ̀, bíi láti ta ọjà àtijọ́ tán tàbí láti dúpẹ́ lọ́wọ́ àwọn oníbàárà olóòótọ́, kì í ṣe bí àṣà.",
+    "ha": "Ragi na cin kuɗinku. Ku bayar da shi da gangan, misali don share tsohon kaya ko don saka wa kwastomomi masu aminci, ba don al'ada ba.",
+    "ig": "Mbelata ọnụ ahịa na-efu gị ego. Nye ya n'ebumnuche, dị ka iji ree ngwa ochie ma ọ bụ kelee ndị ahịa kwesịrị ntụkwasị obi, ọ bụghị n'omume."
+  }
+}

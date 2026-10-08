@@ -334,3 +334,26 @@ describe("reliability and privacy", () => {
     expect(t.state.users.size).toBe(0);
   });
 });
+
+describe("slow replies", () => {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  it("tells the user we got it when the engine is slow, then sends the reply", async () => {
+    const t = await onboarded();
+    t.deps.slowReplyMs = 5;
+    t.engine.routeResult = { intent: "greeting" };
+    const route = t.engine.route;
+    t.engine.route = async (...args) => (await wait(40), route(...args));
+    await handleMessage(t.deps, text("hello"));
+    expect(t.sent.map((s) => s.body)).toEqual(["⏳ Got it, one moment…", expect.stringContaining("Hello!")]);
+  });
+
+  it("sends no notice when the reply comes quickly", async () => {
+    const t = await onboarded();
+    t.deps.slowReplyMs = 30;
+    t.engine.routeResult = { intent: "greeting" };
+    await handleMessage(t.deps, text("hello"));
+    await wait(60);
+    expect(t.sent.map((s) => s.body)).toEqual([expect.stringContaining("Hello!")]);
+  });
+});

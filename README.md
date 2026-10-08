@@ -101,13 +101,11 @@ node scripts/serve_site.mjs       # http://localhost:4321
 | Command                                                           | Does                                                                     |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `npm run export:csv` (gateway)                                    | Writes the interaction log to `exports/interactions_<date>.csv`          |
-| `uv run python scripts/translate_tips.py` (engine)                | Drafts Yoruba/Hausa/Igbo tips into `supabase/seed/tip_translations.json` |
-| `npm run tips:sync` (gateway)                                     | Uploads those drafts to Supabase                                         |
-| `npm run locales:translate` (gateway)                             | Drafts missing `src/locales/{yo,ha,ig}.json` strings                     |
+| `npm run tips:sync` (gateway)                                     | Uploads `supabase/seed/tip_translations.json` to Supabase                |
 | `uv run --extra ml python scripts/eval_asr.py` (engine)           | ASR word error rate from `engine/eval/<lang>/transcripts.csv`            |
 | `uv run --with qrcode python scripts/set_whatsapp_number.py 234…` | Puts the WhatsApp number and QR into the site                            |
 
-All machine translations are drafts. A native speaker must review them before they are marked `reviewed`.
+Yoruba, Hausa and Igbo strings and tips are hand-translated from the English. A native speaker must review them before they are marked `reviewed`.
 
 ## Credits and licences
 

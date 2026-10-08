@@ -1,5 +1,5 @@
 {
-  "consent_prompt": "Welcome to Sọ̀rọ̀ 👋\nTell me what you spend, earn, sell or lend, by voice note or text, and I'll keep the record. Ask \"Where my money dey go?\" anytime.\n\nWe save what you tell us so we can answer you. We do not store your phone number. Type DELETE anytime to remove everything.\nPrivacy: {privacy_url}\n\nDo you agree?",
+  "consent_prompt": "Welcome to Sọ̀rọ̀ 👋 Talk am, I go write am.\nTell me what you spend, earn, sell or lend, by voice note or text, and I'll keep the record. Ask \"Where my money dey go?\" anytime.\n\nWe save what you tell us so we can answer you. We do not store your phone number. Type DELETE anytime to remove everything.\nPrivacy: {privacy_url}\n\nDo you agree?",
   "consent_yes": "I agree",
   "consent_no": "No thanks",
   "consent_declined": "No wahala. If you change your mind, just send any message.",
@@ -79,6 +79,7 @@
   "delete_no": "No, keep",
   "deleted": "Done. Everything is deleted. Send any message if you want to start again.",
   "delete_cancelled": "Okay, nothing was deleted.",
+  "working": "⏳ Got it, one moment…",
   "error": "Sorry, something went wrong on our side. Please try again in a minute.",
   "a_loan": "a loan"
 }

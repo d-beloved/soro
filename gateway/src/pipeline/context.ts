@@ -15,6 +15,8 @@ export interface Deps {
   /** The bot's WhatsApp number, digits only, for share links. */
   publicNumber: string;
   voiceReplies: boolean;
+  /** How long engine work may take before the user gets a "one moment" notice; defaults to 10s. */
+  slowReplyMs?: number;
   now?: () => Date;
 }
 
@@ -26,6 +28,8 @@ export interface Ctx {
   lang: Lang;
   messageId: string;
   now: Date;
+  /** Pending "one moment" notice; cleared by the first real reply. */
+  slowNotice?: ReturnType<typeof setTimeout>;
 }
 
 export interface Reply {

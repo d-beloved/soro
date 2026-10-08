@@ -164,9 +164,6 @@ export function fakeEngine(routeResult: unknown = { intent: "unknown" }, transcr
       calls.push("adapt");
       return `Adapted: ${tip}`;
     },
-    async translate(text) {
-      return text;
-    },
     async speak(text) {
       calls.push("speak");
       spoken.push(text);

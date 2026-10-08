@@ -2,10 +2,13 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { parseIntent } from "../src/domain/intents.js";
 import { formatNaira, parseNaira } from "../src/domain/money.js";
-import { parseRef } from "../src/domain/ref.js";
+import { hideTag, parseRef, stripHiddenTag } from "../src/domain/ref.js";
 import { periodStart, todayWAT } from "../src/domain/time.js";
 import { hashPhone } from "../src/lib/hash.js";
-import { t } from "../src/locales/index.js";
+import { english, t, type MsgKey } from "../src/locales/index.js";
+import ha from "../src/locales/ha.json" with { type: "json" };
+import ig from "../src/locales/ig.json" with { type: "json" };
+import yo from "../src/locales/yo.json" with { type: "json" };
 import { verifySignature } from "../src/whatsapp/signature.js";
 
 describe("verifySignature", () => {
@@ -64,6 +67,10 @@ describe("time (WAT)", () => {
 describe("parseRef", () => {
   it("reads the tag from a wa.me prefill", () => expect(parseRef("Hi Sọ̀rọ̀ [oshodi_1]")).toBe("OSHODI_1"));
   it("ignores text without a tag", () => expect(parseRef("I sell rice 5k")).toBeNull());
+  it("reads a hidden tag", () => expect(parseRef(`Hi Sọ̀rọ̀${hideTag("web")}`)).toBe("WEB"));
+  it("prefers the hidden tag", () => expect(parseRef(`Hi Sọ̀rọ̀ [F-3F9A1C]${hideTag("QR")}`)).toBe("QR"));
+  it("ignores a stray zero-width space", () => expect(parseRef("Hi\u200BSọ̀rọ̀")).toBeNull());
+  it("hides the tag from the text", () => expect(stripHiddenTag(`Hi Sọ̀rọ̀${hideTag("QR")}`)).toBe("Hi Sọ̀rọ̀"));
 });
 
 describe("hashPhone", () => {
@@ -75,7 +82,22 @@ describe("hashPhone", () => {
 });
 
 describe("locales", () => {
-  it("fills placeholders and falls back to English", () => {
-    expect(t("yo", "stock_logged", { qty: "10 cartons", item: "Indomie" })).toBe("📦 Stock noted: 10 cartons Indomie.");
+  const tables: Record<"yo" | "ha" | "ig", Partial<Record<MsgKey, string>>> = { yo, ha, ig };
+  it("fills placeholders", () => {
+    expect(t("en", "stock_logged", { qty: "10 cartons", item: "Indomie" })).toBe("📦 Stock noted: 10 cartons Indomie.");
+  });
+
+  it("falls back to English for keys a language doesn't have yet", () => {
+    for (const lang of ["yo", "ha", "ig"] as const) {
+      const missing = (Object.keys(english) as MsgKey[]).find((k) => !(k in tables[lang]));
+      if (missing) expect(t(lang, missing)).toBe(english[missing]);
+    }
+  });
+
+  it("keeps every placeholder in the yo/ha/ig drafts", () => {
+    const names = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort().join(",");
+    for (const lang of ["yo", "ha", "ig"] as const) {
+      for (const [key, text] of Object.entries(tables[lang])) expect(names(text!), `${lang}.${key}`).toBe(names(english[key as MsgKey]));
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { Intent, LANGS, parseIntent, type Lang } from "../domain/intents.js";
-import { parseRef, shareCode } from "../domain/ref.js";
+import { parseRef, shareCode, stripHiddenTag } from "../domain/ref.js";
 import { todayWAT } from "../domain/time.js";
 import { hashPhone } from "../lib/hash.js";
 import { LANGUAGE_PROMPT, LANGUAGE_ROWS, t } from "../locales/index.js";
@@ -18,6 +18,9 @@ interface Outcome {
 
 /** Someone who sends several messages before answering gets the consent prompt once, not once per message. */
 const CONSENT_REPROMPT_MS = 10 * 60_000;
+
+/** A warm engine answers a Yoruba voice note in ~5-8s; past this, say we're on it instead of leaving blue ticks. */
+const SLOW_REPLY_MS = 10_000;
 
 const COMMANDS: Record<string, "help" | "language" | "delete" | "undo" | "share"> = {
   HELP: "help",
@@ -46,7 +49,7 @@ export async function handleMessage(deps: Deps, msg: InboundMessage): Promise<vo
   const ctx: Ctx = { deps, msg, user, lang: user.language ?? "en", messageId, now };
   const outcome: Outcome = {};
   try {
-    await dispatch(ctx, outcome);
+    await dispatch(ctx, outcome).finally(() => clearTimeout(ctx.slowNotice));
     await deps.repo.updateMessage(messageId, { ...outcome, language: ctx.lang, latency_ms: Date.now() - started });
   } catch (err) {
     deps.log.error({ err, messageId }, "message handling failed");
@@ -61,7 +64,7 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   const { deps, msg, user } = ctx;
   const to = msg.from;
   const choice = msg.interactive?.button_reply?.id ?? msg.interactive?.list_reply?.id;
-  const text = msg.text?.body?.trim();
+  const text = msg.text?.body ? stripHiddenTag(msg.text.body).trim() : undefined;
 
   // 1. Consent (NDPA 2023): nothing is processed before an explicit yes.
   if (!user.consent_at) {
@@ -147,6 +150,7 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   }
 
   // 4. Get the words: transcribe voice notes, take text as-is.
+  startSlowNotice(ctx);
   const isAudio = msg.type === "audio" && !!msg.audio;
   let input: string;
   if (isAudio) {
@@ -190,6 +194,20 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   }
 }
 
+/** The engine can be slow (long voice note, busy or cold GPU): after a while, tell the user we got it. */
+function startSlowNotice(ctx: Ctx): void {
+  const { deps } = ctx;
+  ctx.slowNotice = setTimeout(async () => {
+    try {
+      const text = t(ctx.lang, "working");
+      await deps.wa.sendText(ctx.msg.from, text);
+      await deps.repo.insertOutbound({ user_id: ctx.user.id, type: "text", language: ctx.lang, payload: { text } });
+    } catch (err) {
+      deps.log.warn({ err }, "slow-reply notice failed");
+    }
+  }, deps.slowReplyMs ?? SLOW_REPLY_MS);
+}
+
 async function sendLanguagePicker(ctx: Ctx): Promise<void> {
   await ctx.deps.wa.sendList(ctx.msg.from, LANGUAGE_PROMPT, t("en", "language_button"), LANGUAGE_ROWS);
 }
@@ -205,6 +223,7 @@ function firstLine(text: string): string {
 /** Text first (instant), then the voice note (slower), so nobody waits on TTS. */
 async function deliver(ctx: Ctx, reply: Reply): Promise<void> {
   const { deps } = ctx;
+  clearTimeout(ctx.slowNotice);
   await deps.wa.sendText(ctx.msg.from, reply.text);
   await deps.repo.insertOutbound({ user_id: ctx.user.id, type: "text", language: ctx.lang, payload: { text: reply.text } });
 

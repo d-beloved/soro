@@ -1,5 +1,5 @@
 -- Curated financial-literacy tips (English masters).
--- Translations (text_yo/ha/ig) are produced with N-ATLaS via engine/scripts/translate_tips.py
+-- Translations (text_yo/ha/ig) are hand-written in supabase/seed/tip_translations.json
 -- and must be reviewed by a native speaker before reviewed->>'<lang>' is set to true.
 -- Keep each tip under ~220 characters so it works as a short voice note.
 

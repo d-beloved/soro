@@ -10,12 +10,19 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 import qrcode
 import qrcode.image.svg
 
 SITE = Path(__file__).resolve().parents[1] / "site"
 PLACEHOLDER = "WA_NUMBER_PLACEHOLDER"
+
+
+def hide_tag(tag: str) -> str:
+    """Zero-width form of a source tag; the gateway's hideTag in gateway/src/domain/ref.ts reads it back."""
+    marks = "\u200b\u200c\u200d\u2060"
+    return "".join(marks[(ord(ch) >> shift) & 3] for ch in tag.upper() for shift in (6, 4, 2, 0))
 
 
 def write_qr(url: str) -> None:
@@ -41,7 +48,7 @@ def main() -> None:
         if PLACEHOLDER in text:
             page.write_text(text.replace(PLACEHOLDER, a.number))
             print("updated", page.name)
-    write_qr(f"https://wa.me/{a.number}?text=Hi%20S%E1%BB%8D%CC%80r%E1%BB%8D%CC%80%20%5BQR%5D")
+    write_qr(f"https://wa.me/{a.number}?text=" + quote("Hi Sọ̀rọ̀" + hide_tag("QR")))
 
 
 if __name__ == "__main__":

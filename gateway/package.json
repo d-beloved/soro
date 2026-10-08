@@ -13,8 +13,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "export:csv": "tsx --env-file=.env src/scripts/exportCsv.ts",
-    "tips:sync": "tsx --env-file=.env src/scripts/syncTips.ts",
-    "locales:translate": "tsx --env-file=.env src/scripts/translateLocales.ts"
+    "tips:sync": "tsx --env-file=.env src/scripts/syncTips.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",

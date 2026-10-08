@@ -1,4 +1,4 @@
-// Uploads tip translations drafted by engine/scripts/translate_tips.py.
+// Uploads the hand-written tip translations.
 // Input: ../supabase/seed/tip_translations.json  { "<tip_id>": { "yo": "...", "ha": "...", "ig": "..." } }
 // Only fills text_<lang>; set reviewed.<lang>=true in the dashboard after a native speaker checks it.
 import { readFileSync } from "node:fs";

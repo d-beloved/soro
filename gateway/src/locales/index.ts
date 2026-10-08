@@ -4,7 +4,7 @@ import ha from "./ha.json" with { type: "json" };
 import ig from "./ig.json" with { type: "json" };
 import type { Lang } from "../domain/intents.js";
 
-// en.json is the master. yo/ha/ig are drafted by N-ATLaS (npm run locales:translate)
+// en.json is the master. yo/ha/ig are hand-translated from it
 // and reviewed by native speakers. Missing keys fall back to English.
 
 export type MsgKey = keyof typeof en;
