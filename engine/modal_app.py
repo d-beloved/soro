@@ -10,22 +10,15 @@ Deploy:
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
 
 import modal
 
 APP_NAME = "soroengine"
 MODELS = "/models"
 
-# Warm window: one container kept up 09:00-21:00 WAT on these dates only
-# (T4 ~$0.59/h -> ~$7/day). Outside the window the engine scales to zero and cold-starts on demand.
-WARM_FROM = "2026-10-07"
-WARM_TO = "2026-10-11"
-
 app = modal.App(APP_NAME)
 volume = modal.Volume.from_name("soro-models", create_if_missing=True)
 secret = modal.Secret.from_name("soro-engine")
-light = modal.Image.debian_slim(python_version="3.11")  # for the cron toggles
 
 image = (
     modal.Image.from_registry("nvidia/cuda:12.4.1-devel-ubuntu22.04", add_python="3.11")
@@ -71,8 +64,8 @@ def setup_models(allow_community_gguf: bool = False):
     gpu="T4",
     volumes={MODELS: volume},
     secrets=[secret],
-    scaledown_window=300,  # stay warm 5 min after the last message
-    min_containers=0,
+    scaledown_window=300,
+    min_containers=1,  # always on, so nobody (users or NAIC judges) waits on a cold start: T4 ~$0.59/h, ~$14/day
     max_containers=1,  # 1,000-user licence cap + budget: one GPU is plenty for now
     timeout=600,
 )
@@ -96,24 +89,8 @@ class Engine:
         return create_api(self.engine, os.environ["ENGINE_TOKEN"])
 
 
-def _in_warm_window() -> bool:
-    today = (datetime.now(timezone.utc) + timedelta(hours=1)).date().isoformat()  # WAT
-    return WARM_FROM <= today <= WARM_TO
-
-
-@app.function(image=light, schedule=modal.Cron("0 9 * * *", timezone="Africa/Lagos"))
-def warm_up():
-    if _in_warm_window():
-        Engine().update_autoscaler(min_containers=1)
-
-
-@app.function(image=light, schedule=modal.Cron("0 21 * * *", timezone="Africa/Lagos"))
-def cool_down():
-    Engine().update_autoscaler(min_containers=0)
-
-
 @app.local_entrypoint()
 def warm(on: bool = True):
-    """Manual override, e.g. before a demo: `modal run modal_app.py::warm --on` / `--no-on`."""
+    """Manual override until the next deploy, e.g. to stop paying for the idle GPU: `modal run modal_app.py::warm --no-on`."""
     Engine().update_autoscaler(min_containers=1 if on else 0)
     print("warm" if on else "scale-to-zero")
