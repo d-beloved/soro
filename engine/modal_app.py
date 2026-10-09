@@ -24,16 +24,15 @@ image = (
     modal.Image.from_registry("nvidia/cuda:12.4.1-devel-ubuntu22.04", add_python="3.11")
     .apt_install("git", "ffmpeg", "build-essential", "cmake", "libportaudio2", "libsndfile1")
     .env({"CC": "gcc", "CXX": "g++"})  # the bundled Python defaults to clang, which isn't installed (pesq needs a compiler)
-    .pip_install("torch==2.5.1", "torchaudio==2.5.1", index_url="https://download.pytorch.org/whl/cu124")
+    # torch 2.6: transformers 5 won't load the NCAIR models' pytorch_model.bin on older torch. cu124 matches the CUDA
+    # that llama.cpp is built against below, so both share one set of CUDA libraries.
+    .pip_install("torch==2.6.0", "torchaudio==2.6.0", index_url="https://download.pytorch.org/whl/cu124")
     .pip_install(
-        "transformers==4.47.1",  # pinned by YarnGPT
-        "outetts==0.2.3",  # pinned by YarnGPT
-        "uroman",
-        "inflect",
+        "transformers==5.14.1",  # OmniVoice needs >= 5.3; this is the release it shipped against
+        "omnivoice==0.2.1",
         "accelerate",
         "fastapi[standard]",
-        "huggingface_hub[hf_transfer]",
-        "gdown",
+        "huggingface_hub",
     )
     .run_commands(
         'CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=75;89" pip install --no-cache-dir llama-cpp-python==0.3.36',
@@ -43,7 +42,6 @@ image = (
         {
             "SORO_MODELS_DIR": MODELS,
             "HF_HOME": f"{MODELS}/hf",
-            "YARNGPT_PARENT": f"{MODELS}/vendor",
         }
     )
     .add_local_python_source("soro_engine")
@@ -52,10 +50,10 @@ image = (
 
 # gpu: llama_cpp is built with CUDA and won't even import (for quantizing) without the driver.
 @app.function(image=image, gpu="T4", volumes={MODELS: volume}, secrets=[secret], cpu=4, memory=32768, timeout=3 * 3600)
-def setup_models(allow_community_gguf: bool = False):
+def setup_models(allow_community_gguf: bool = False, redo_voices: bool = False):
     from soro_engine.setup_models import run
 
-    run(allow_community_gguf=allow_community_gguf)
+    run(allow_community_gguf=allow_community_gguf, redo_voices=redo_voices)
     volume.commit()
 
 

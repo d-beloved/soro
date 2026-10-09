@@ -1,13 +1,16 @@
-import type { Lang } from "../domain/intents.js";
+import { LANGS, type Lang } from "../domain/intents.js";
 
 // Client for the GPU engine (engine/soro_engine/api.py), on Modal or localhost.
 
 export interface Transcription {
   text: string;
   seconds: number;
+  /** The language the voice note was heard in; can differ from the user's chosen one. */
+  lang: Lang;
 }
 
 export interface EngineApi {
+  /** `lang` is the user's chosen language; the engine also listens for the other three. */
   transcribe(audio: Uint8Array<ArrayBuffer>, mimeType: string, lang: Lang): Promise<Transcription>;
   /** Returns the raw router JSON; validate it with parseIntent(). */
   route(text: string, lang: Lang, today: string): Promise<unknown>;
@@ -54,9 +57,10 @@ export function createEngineClient(opts: Options): EngineApi {
 
   return {
     async transcribe(audio, mimeType, lang) {
-      const res = await post(`/transcribe?lang=${lang}`, audio, mimeType);
-      const body = (await res.json()) as Transcription;
-      return { text: body.text.trim(), seconds: body.seconds };
+      const res = await post(`/transcribe?lang=${lang}&detect=true`, audio, mimeType);
+      const body = (await res.json()) as { text: string; seconds: number; lang?: string };
+      const heard = LANGS.find((l) => l === body.lang) ?? lang; // an older engine doesn't send it
+      return { text: body.text.trim(), seconds: body.seconds, lang: heard };
     },
     async route(text, lang, today) {
       return (await json("/route", { text, lang, today })).intent;

@@ -1,4 +1,4 @@
-"""Run the engine on your Mac (Metal for N-ATLaS, MPS for Whisper, CPU for YarnGPT).
+"""Run the engine on your Mac (Metal for N-ATLaS, MPS for Whisper and OmniVoice).
 
   uv run python serve_local.py                # everything
   uv run python serve_local.py --no-tts       # faster startup; set VOICE_REPLIES=off in gateway/.env

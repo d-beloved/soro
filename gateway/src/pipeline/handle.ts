@@ -1,4 +1,5 @@
 import { Intent, LANGS, parseIntent, type Lang } from "../domain/intents.js";
+import { formatNaira } from "../domain/money.js";
 import { parseRef, shareCode, stripHiddenTag } from "../domain/ref.js";
 import { todayWAT } from "../domain/time.js";
 import { hashPhone } from "../lib/hash.js";
@@ -156,6 +157,11 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   if (isAudio) {
     const media = await deps.wa.downloadMedia(msg.audio!.id);
     const tr = await deps.engine.transcribe(media.bytes, media.mimeType, ctx.lang);
+    if (tr.lang !== ctx.lang) {
+      // Spoken in another of the four languages: understand and answer this note in that one; the saved choice stays.
+      deps.log.info({ messageId: ctx.messageId, chosen: ctx.lang, heard: tr.lang }, "voice note in another language");
+      ctx.lang = tr.lang;
+    }
     out.transcript = tr.text;
     out.audio_seconds = tr.seconds;
     if (!tr.text) {
@@ -178,6 +184,7 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   out.payload = intent;
 
   let reply = await applyCommerce(ctx, intent);
+  if (reply && intent.amount_ngn != null && intent.other_amounts.length > 0) reply = withOtherAmounts(ctx, reply, intent.other_amounts);
   if (!reply && intent.intent === "ask_question") reply = await answerQuestion(ctx, intent.topic, intent.question ?? input);
   if (!reply && intent.intent === "help") reply = { text: t(ctx.lang, "help"), voice: false };
   if (!reply && intent.intent === "greeting") reply = { text: t(ctx.lang, "greeting"), voice: true };
@@ -192,6 +199,15 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
     const tip = await autoTip(ctx, reply.autoTipTopic);
     if (tip) await deliver(ctx, tip);
   }
+}
+
+/**
+ * One message saves one record, so "rice 5k, beans 3k, and I buy fuel 2k" loses the fuel. The engine lists the
+ * amounts the record leaves out; say so, out loud too, instead of dropping them silently.
+ */
+function withOtherAmounts(ctx: Ctx, reply: Reply, amounts: number[]): Reply {
+  const note = t(ctx.lang, "other_amounts", { amounts: amounts.map(formatNaira).join(", ") });
+  return { ...reply, text: `${reply.text}\n\n${note}`, spoken: `${reply.spoken ?? firstLine(reply.text)} ${note}` };
 }
 
 /** The engine can be slow (long voice note, busy or cold GPU): after a while, tell the user we got it. */
@@ -213,8 +229,8 @@ async function sendLanguagePicker(ctx: Ctx): Promise<void> {
 }
 
 /**
- * The voice note says only the headline (the first line, unless the reply sets `spoken`): long notes take
- * YarnGPT a minute and come out muddled, and the full detail is already in the text.
+ * The voice note says only the headline (the first line, unless the reply sets `spoken`): long notes are slow
+ * to make and to listen to, and the full detail is already in the text.
  */
 function firstLine(text: string): string {
   return text.split("\n", 1)[0]!;

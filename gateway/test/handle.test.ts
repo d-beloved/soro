@@ -93,6 +93,22 @@ describe("commerce", () => {
     expect(t.sent.at(-2)!.body).toContain("Type SHARE");
   });
 
+  it("says which amounts in a message were not saved, in the text and the voice note", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_sale", item: "rice and beans", amount_ngn: 8000, other_amounts: [2000] };
+    await handleMessage(t.deps, voice());
+    expect(t.state.txns).toEqual([expect.objectContaining({ kind: "sale", amount_ngn: 8000 })]);
+    expect(t.sent[0]!.body).toContain("I also heard ₦2,000");
+    expect(t.spoken[0]).toMatch(/^✅ Sale recorded: .*₦8,000\. ℹ️ I also heard ₦2,000/);
+  });
+
+  it("does not mention other amounts when nothing was saved", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_sale", item: "rice", other_amounts: [2000] };
+    await handleMessage(t.deps, text("I sell rice"));
+    expect(t.sent[0]!.body).not.toContain("also heard");
+  });
+
   it("asks for the amount instead of guessing", async () => {
     const t = await onboarded();
     t.engine.routeResult = { intent: "log_sale", item: "rice" };
@@ -164,6 +180,55 @@ describe("fixing mistakes", () => {
     await handleMessage(t.deps, text("no be 5k, na 50k"));
     expect(t.state.txns[0].amount_ngn).toBe(50000);
     expect(t.sent[0]!.body).toContain("Fixed: Sale: pepper — ₦50,000");
+  });
+
+  it("fixes the kind and the amount in one message", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_income", item: "salary", amount_ngn: 135000 };
+    await handleMessage(t.deps, text("there's a tithe 135,000"));
+    t.sent.length = 0;
+    t.engine.routeResult = { intent: "correct_last", correct_to: "log_expense", item: "tithe", amount_ngn: 135100 };
+    await handleMessage(t.deps, text("no be income, na tithe I pay, 135,100"));
+    expect(t.state.txns[0]).toMatchObject({ kind: "expense", item: "tithe", amount_ngn: 135100, category: "other" });
+    expect(t.sent[0]!.body).toContain("Fixed: Spending: tithe — ₦135,100 (other)");
+  });
+
+  it("fixes a category, or a debt's person and direction", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_expense", item: "bolt", amount_ngn: 3500, category: "food" };
+    await handleMessage(t.deps, text("bolt 3500"));
+    t.engine.routeResult = { intent: "correct_last", category: "transport" };
+    await handleMessage(t.deps, text("e no be food, na transport"));
+    expect(t.state.txns[0]).toMatchObject({ kind: "expense", category: "transport", amount_ngn: 3500 });
+
+    t.engine.routeResult = { intent: "log_debt", counterparty: "Chidi", amount_ngn: 7000, direction: "owed_to_me" };
+    await handleMessage(t.deps, text("Chidi owe me 7k"));
+    t.engine.routeResult = { intent: "correct_last", counterparty: "Emeka", direction: "i_owe" };
+    await handleMessage(t.deps, text("na Emeka, and na me owe am"));
+    expect(t.state.txns[1]).toMatchObject({ kind: "debt_i_owe", counterparty: "Emeka", amount_ngn: 7000, category: null });
+  });
+
+  it("asks what to change when the correction changes nothing", async () => {
+    const t = await onboarded();
+    t.engine.routeResult = { intent: "log_sale", item: "pepper", amount_ngn: 5000 };
+    await handleMessage(t.deps, text("sold pepper 5k"));
+    t.sent.length = 0;
+    t.engine.routeResult = { intent: "correct_last", amount_ngn: 5000 };
+    await handleMessage(t.deps, text("e no correct"));
+    expect(t.sent[0]!.body).toContain("What should I change? Last record: Sale: pepper — ₦5,000");
+  });
+});
+
+describe("spoken language", () => {
+  it("understands and answers a voice note in the language it was spoken in, without changing the saved one", async () => {
+    const t = await onboarded("lang_en");
+    t.engine.heardLang = "yo";
+    t.engine.routeResult = { intent: "log_sale", item: "rice", amount_ngn: 75000 };
+    await handleMessage(t.deps, voice());
+    expect(t.sent[0]!.body).toContain("Ohun tí mo gbọ́");
+    const user = [...t.state.users.values()][0]!;
+    expect(user.language).toBe("en");
+    expect(t.state.messages.at(-1)).toMatchObject({ language: "yo" });
   });
 });
 

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from soro_engine import prompts
 from soro_engine.api import create_api
-from soro_engine.text import clean_for_speech, placeholders, split_sentences
+from soro_engine.text import clean_for_speech, placeholders
 
 TOKEN = "t" * 32
 
@@ -15,8 +15,9 @@ TOKEN = "t" * 32
 @pytest.mark.parametrize(
     ("raw", "spoken"),
     [
-        ("✅ Sale recorded: 3 bags rice — ₦75,000.", "Sale recorded: 3 bags rice — 75000 naira"),
-        ("You owe Alhaji 20k", "You owe Alhaji 20000"),
+        ("✅ Sale recorded: 3 bags rice — ₦75,000.", "Sale recorded: three bags rice — seventy five thousand naira"),
+        ("You owe Alhaji 20k", "You owe Alhaji twenty thousand"),
+        ("Data 1500 naira, N2.5m, 20kg, 0.5", "Data one thousand five hundred naira, two million five hundred thousand naira, 20kg, 0.5"),
         ("💡 Money tip\nSave small every day.", "Money tip. Save small every day"),
         ('I heard: "I sell rice"', "I heard: I sell rice"),
         ("Fi owó díẹ̀ pamọ́ lójoojúmọ́.", "Fi owó díẹ̀ pamọ́ lójoojúmọ́"),
@@ -26,12 +27,16 @@ def test_clean_for_speech(raw, spoken):
     assert clean_for_speech(raw) == spoken
 
 
-def test_split_sentences_respects_limit():
-    text = "One short sentence. " * 30
-    chunks = split_sentences(text, max_chars=100)
-    assert all(len(c) <= 100 for c in chunks)
-    assert " ".join(chunks).count("One") == 30
-    assert split_sentences("word " * 100, max_chars=50)[0].endswith("word")
+@pytest.mark.parametrize(
+    ("lang", "spoken"),
+    [
+        ("yo", "Mo tà á ní náírà ẹgbẹ̀rún lọ́nà ọgọ́rùn-ún ó lé márùndínlọ́gbọ̀n"),
+        ("ha", "Mo tà á ní naira dubu ɗari da ashirin da biyar"),
+        ("ig", "Mo tà á ní naira puku narị na iri abụọ na ise"),
+    ],
+)
+def test_clean_for_speech_says_amounts_in_the_reply_language(lang, spoken):
+    assert clean_for_speech("Mo tà á ní ₦125,000", lang) == spoken
 
 
 def test_router_prompt_and_schema():
@@ -56,8 +61,8 @@ class FakeEngine:
     def status(self):
         return {"asr": True, "llm": True, "tts": True}
 
-    def transcribe(self, data, lang):
-        return {"text": f"heard {len(data)} bytes in {lang}", "seconds": 1.5}
+    def transcribe(self, data, lang, detect=False):
+        return {"text": f"heard {len(data)} bytes in {lang}", "lang": "yo" if detect else lang, "seconds": 1.5}
 
     def route(self, text, lang, today):
         return {"intent": "log_sale", "amount_ngn": 5000}
@@ -92,7 +97,7 @@ def test_auth_required(client):
 
 def test_routes(client):
     r = client.post("/transcribe?lang=ha", content=b"1234", headers={**AUTH, "Content-Type": "audio/ogg"})
-    assert r.json() == {"text": "heard 4 bytes in ha", "seconds": 1.5}
+    assert r.json() == {"text": "heard 4 bytes in ha", "lang": "ha", "seconds": 1.5}
     r = client.post("/route", json={"text": "I sell 5k", "lang": "en", "today": "2026-10-07"}, headers=AUTH)
     assert r.json()["intent"]["intent"] == "log_sale"
     r = client.post("/adapt", json={"tip": "Save daily.", "question": "How?", "lang": "ig"}, headers=AUTH)
@@ -119,3 +124,32 @@ def test_category_kept_only_where_it_applies():
     assert tidy_route({"intent": "set_budget", "category": "food"})["category"] == "food"
     assert needs_category({"intent": "log_expense"}) and needs_category({"intent": "set_budget", "category": None})
     assert not needs_category({"intent": "log_sale"}) and not needs_category({"intent": "log_expense", "category": "food"})
+
+
+def test_detect_flag_reaches_the_engine(client):
+    r = client.post("/transcribe?lang=en&detect=true", content=b"1234", headers={**AUTH, "Content-Type": "audio/ogg"})
+    assert r.json()["lang"] == "yo"
+
+
+def test_corrections_keep_their_fields():
+    from soro_engine.prompts import needs_category, tidy_route
+
+    fix = tidy_route({"intent": "correct_last", "correct_to": "log_expense", "category": "transport"})
+    assert fix["correct_to"] == "log_expense" and fix["category"] == "transport"
+    assert tidy_route({"intent": "log_sale", "correct_to": "log_expense"})["correct_to"] is None
+    # a category call only when the correction turns the record into a spend and says what it was
+    assert needs_category({"intent": "correct_last", "correct_to": "log_expense", "item": "tithe"})
+    assert not needs_category({"intent": "correct_last", "correct_to": "log_expense"})
+    assert not needs_category({"intent": "correct_last", "amount_ngn": 5000})
+
+
+def test_language_pick_needs_a_clear_win():
+    from soro_engine.asr import SWITCH_MARGIN, Guess, pick, score_tokens
+
+    own = Guess("en", "moral data", -0.9)
+    assert pick(own, [Guess("yo", "mo ra data", -0.3), Guess("ha", "x", -1.5)]).lang == "yo"
+    assert pick(own, [Guess("yo", "mo ra data", -0.9 + SWITCH_MARGIN / 2)]).lang == "en"  # near tie: keep theirs
+    assert pick(own, []).lang == "en"
+    assert score_tokens([-0.1, -0.2], "") == float("-inf")
+    assert score_tokens([-0.1] * 50, "ra " * 40) == float("-inf")  # looping
+    assert score_tokens([-0.1, -0.3], "mo ra data") == -0.2

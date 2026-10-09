@@ -16,18 +16,18 @@ from pathlib import Path
 
 from .config import (
     ASR_MODELS,
+    LANGS,
     LLM_COMMUNITY_GGUF,
     LLM_GGUF,
     LLM_REPO,
     MODELS_DIR,
-    TTS_REPO,
-    WAV_CKPT,
-    WAV_CKPT_GDRIVE_ID,
-    WAV_CONFIG,
-    WAV_CONFIG_REPO,
-    YARNGPT_COMMIT,
-    YARNGPT_GIT,
-    YARNGPT_PARENT,
+    TTS_AUDIO_TOKENIZER,
+    TTS_FILES,
+    TTS_INSTRUCT,
+    TTS_REPOS,
+    TTS_SEED,
+    TTS_VOICE_TEXT,
+    VOICES_DIR,
 )
 
 LLAMA_CPP_GIT = "https://github.com/ggml-org/llama.cpp.git"
@@ -38,36 +38,61 @@ def sh(*cmd: str, cwd: Path | None = None) -> None:
     subprocess.run(cmd, check=True, cwd=cwd)
 
 
-def ensure_yarngpt() -> None:
-    target = YARNGPT_PARENT / "yarngpt"
-    if (target / "audiotokenizer.py").exists():
-        return
-    YARNGPT_PARENT.mkdir(parents=True, exist_ok=True)
-    sh("git", "clone", "-q", YARNGPT_GIT, str(target))
-    sh("git", "checkout", "-q", YARNGPT_COMMIT, cwd=target)
-
-
 def download_hf_models() -> None:
-    from huggingface_hub import hf_hub_download, snapshot_download
+    from huggingface_hub import snapshot_download
 
-    for repo in [*ASR_MODELS.values(), TTS_REPO]:
+    for repo in ASR_MODELS.values():
         print(f"downloading {repo}", flush=True)
         # The NCAIR ASR repos only ship pytorch_model.bin (plus optimizer/rng checkpoints we skip).
         snapshot_download(
             repo, allow_patterns=["*.json", "*.safetensors", "pytorch_model.bin", "*.txt", "*.model", "*.py"]
         )
+    for repo, revision in dict.fromkeys(TTS_REPOS.values()):
+        print(f"downloading {repo}@{revision[:7]}", flush=True)
+        snapshot_download(repo, revision=revision, allow_patterns=TTS_FILES)
+    snapshot_download(TTS_AUDIO_TOKENIZER)
 
-    if not WAV_CONFIG.exists():
-        src = hf_hub_download(WAV_CONFIG_REPO, WAV_CONFIG.name)
-        shutil.copy(src, WAV_CONFIG)
 
-    if not WAV_CKPT.exists():
-        import gdown
+def make_voices(redo: bool = False) -> None:
+    """Designs each language's voice once and saves it, so every reply is in the same voice. Needs a GPU."""
+    import torch
+    from omnivoice import OmniVoice
 
-        # The YarnGPT2 model card ships this checkpoint via Google Drive.
-        gdown.download(id=WAV_CKPT_GDRIVE_ID, output=str(WAV_CKPT), quiet=False)
-        if not WAV_CKPT.exists() or WAV_CKPT.stat().st_size < 10_000_000:
-            raise RuntimeError("WavTokenizer checkpoint download failed (Google Drive quota?). Retry later.")
+    from .engine import pick_device
+    from .tts import load_models, voice_path
+
+    VOICES_DIR.mkdir(parents=True, exist_ok=True)
+    for lang in LANGS:
+        if TTS_SEED[lang] is None:  # no saved voice for this language: drop any left from before
+            voice_path(lang).unlink(missing_ok=True)
+            (VOICES_DIR / f"{lang}.wav").unlink(missing_ok=True)
+    todo = [lang for lang in LANGS if TTS_SEED[lang] is not None and (redo or not voice_path(lang).exists())]
+    if not todo:
+        return
+    models = load_models(pick_device())
+    for lang in todo:
+        model: OmniVoice = models[lang]
+        torch.manual_seed(TTS_SEED[lang])
+        audio = model.generate(text=TTS_VOICE_TEXT[lang], language=lang, instruct=TTS_INSTRUCT[lang])[0]
+        prompt = model.create_voice_clone_prompt(
+            (torch.from_numpy(audio).float(), model.sampling_rate), ref_text=TTS_VOICE_TEXT[lang]
+        )
+        prompt.save(str(voice_path(lang)))
+        _save_wav(VOICES_DIR / f"{lang}.wav", audio, model.sampling_rate)  # to listen to
+        print(f"voice {lang}: seed {TTS_SEED[lang]}, {audio.size / model.sampling_rate:.1f}s", flush=True)
+
+
+def _save_wav(path: Path, audio, rate: int) -> None:
+    import wave
+
+    import numpy as np
+
+    pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2")
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
 
 
 def build_gguf(allow_community: bool) -> None:
@@ -120,10 +145,10 @@ def _scratch_dir() -> str | None:
     return "/tmp" if Path("/tmp").exists() else None
 
 
-def run(allow_community_gguf: bool = False, skip_llm: bool = False) -> None:
+def run(allow_community_gguf: bool = False, skip_llm: bool = False, redo_voices: bool = False) -> None:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    ensure_yarngpt()
     download_hf_models()
+    make_voices(redo=redo_voices)
     if not skip_llm:
         build_gguf(allow_community_gguf)
     print("models ready in", MODELS_DIR, flush=True)
@@ -133,5 +158,6 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--allow-community-gguf", action="store_true")
     p.add_argument("--skip-llm", action="store_true", help="ASR/TTS only (e.g. copy the GGUF from Modal instead)")
+    p.add_argument("--redo-voices", action="store_true", help="design the TTS voices again (after changing TTS_SEED)")
     a = p.parse_args()
-    run(a.allow_community_gguf, a.skip_llm)
+    run(a.allow_community_gguf, a.skip_llm, a.redo_voices)

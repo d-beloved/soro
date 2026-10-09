@@ -59,12 +59,12 @@ def create_api(engine: SoroEngine, token: str) -> FastAPI:
         return {"ok": True, **engine.status()}
 
     @app.post("/transcribe", dependencies=[Depends(auth)])
-    async def transcribe(request: Request, lang: Lang = Query("en")) -> dict:
+    async def transcribe(request: Request, lang: Lang = Query("en"), detect: bool = Query(False)) -> dict:
         data = await request.body()
         if not data or len(data) > MAX_AUDIO_BYTES:
             raise HTTPException(status_code=400, detail="audio body missing or too large")
         try:
-            return await run_in_threadpool(engine.transcribe, data, lang)
+            return await run_in_threadpool(engine.transcribe, data, lang, detect)
         except ValueError as e:  # undecodable audio
             raise HTTPException(status_code=422, detail=str(e)) from e
 

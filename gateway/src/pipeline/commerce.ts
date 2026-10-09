@@ -1,4 +1,4 @@
-import type { DebtRow, SummaryRow, TxnKind, TxnRow } from "../db/repo.js";
+import type { DebtRow, SummaryRow, TxnKind, TxnPatch, TxnRow } from "../db/repo.js";
 import { isBusinessCategory, type Category, type Intent } from "../domain/intents.js";
 import { formatNaira } from "../domain/money.js";
 import { periodStart } from "../domain/time.js";
@@ -20,11 +20,37 @@ const isPersonalSpend = (r: SummaryRow) => r.kind === "expense" && !isBusinessCa
 
 const categoryLabel = (lang: Lang, c: string | null) => t(lang, `cat_${c ?? "other"}` as MsgKey);
 
-/** "Sale: 3 bags rice — ₦75,000" for a stored record, used by UNDO and corrections. */
-function describeRow(lang: Lang, r: TxnRow, amount = r.amount_ngn): string {
+/** "Sale: 3 bags rice — ₦75,000" for a stored record, used by UNDO and corrections. Spends add their category. */
+function describeRow(lang: Lang, r: TxnRow): string {
   const what = [r.qty != null ? String(r.qty) : null, r.unit, r.item].filter(Boolean).join(" ") || r.counterparty || "";
-  const parts = [what, amount != null ? formatNaira(amount) : null].filter(Boolean).join(" — ");
-  return `${t(lang, `kind_${r.kind}` as MsgKey)}${parts ? `: ${parts}` : ""}`;
+  const parts = [what, r.amount_ngn != null ? formatNaira(r.amount_ngn) : null].filter(Boolean).join(" — ");
+  const category = r.kind === "expense" && r.category ? ` (${categoryLabel(lang, r.category)})` : "";
+  return `${t(lang, `kind_${r.kind}` as MsgKey)}${parts ? `: ${parts}` : ""}${category}`;
+}
+
+const isIOwe = (k: TxnKind) => k === "debt_i_owe" || k === "debt_i_paid";
+
+/**
+ * What a correction changes on the last record: any of its kind, amount, item, category and person, in one
+ * message ("no be income, na tithe I pay, 135k"). Only fields that differ are returned; empty means nothing to fix.
+ */
+export function correctionPatch(last: TxnRow, i: Intent): TxnPatch {
+  // Debts keep their direction unless the user gives one.
+  const iOwe = i.direction ? i.direction === "i_owe" : isIOwe(last.kind);
+  let kind = last.kind;
+  if (i.correct_to === "log_sale") kind = "sale";
+  else if (i.correct_to === "log_expense") kind = "expense";
+  else if (i.correct_to === "log_income") kind = "income";
+  else if (i.correct_to === "log_debt" || (!i.correct_to && i.direction && (last.kind === "debt_owed_to_me" || last.kind === "debt_i_owe")))
+    kind = iOwe ? "debt_i_owe" : "debt_owed_to_me";
+  else if (i.correct_to === "debt_paid" || (!i.correct_to && i.direction && (last.kind === "debt_paid_to_me" || last.kind === "debt_i_paid")))
+    kind = iOwe ? "debt_i_paid" : "debt_paid_to_me";
+
+  // Only spends have a category; one that becomes a spend without being told falls back to "other".
+  const category = kind === "expense" ? (i.category ?? last.category ?? "other") : null;
+
+  const next: TxnPatch = { kind, category, amount_ngn: i.amount_ngn ?? last.amount_ngn, item: i.item ?? last.item, counterparty: i.counterparty ?? last.counterparty };
+  return Object.fromEntries(Object.entries(next).filter(([k, v]) => v !== last[k as keyof TxnPatch])) as TxnPatch;
 }
 
 /** What is still owed, per person, after repayments. Positive means unpaid. */
@@ -172,12 +198,13 @@ export async function applyCommerce(ctx: Ctx, i: Intent): Promise<Reply | null> 
     }
 
     case "correct_last": {
-      if (i.amount_ngn == null) return { text: t(lang, "need_amount"), voice: true };
       const last = await repo.lastTransaction(ctx.user.id);
       if (!last) return { text: t(lang, "nothing_to_undo"), voice: true };
       if (last.kind === "stock") return { text: t(lang, "cannot_correct"), voice: true };
-      await repo.updateTransactionAmount(last.id, i.amount_ngn);
-      return { text: t(lang, "corrected", { what: describeRow(lang, last, i.amount_ngn) }), voice: true };
+      const patch = correctionPatch(last, i);
+      if (Object.keys(patch).length === 0) return { text: t(lang, "need_fix", { what: describeRow(lang, last) }), voice: true };
+      await repo.updateTransaction(last.id, patch);
+      return { text: t(lang, "corrected", { what: describeRow(lang, { ...last, ...patch }) }), voice: true };
     }
 
     case "stock_update": {

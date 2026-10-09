@@ -1,4 +1,5 @@
 import type { DebtRow, Repo, SummaryRow, TipRow, UserRow } from "../src/db/repo.js";
+import type { Lang } from "../src/domain/intents.js";
 import type { EngineApi } from "../src/engine/client.js";
 import type { Deps } from "../src/pipeline/context.js";
 import type { WhatsAppApi } from "../src/whatsapp/client.js";
@@ -68,8 +69,8 @@ export function fakeRepo() {
     async voidTransaction(id) {
       state.txns.find((t) => t.id === id).voided_at = "2026-10-04T10:00:00Z";
     },
-    async updateTransactionAmount(id, amount) {
-      state.txns.find((t) => t.id === id).amount_ngn = amount;
+    async updateTransaction(id, patch) {
+      Object.assign(state.txns.find((t) => t.id === id), patch);
     },
     async debts(userId) {
       const out = new Map<string, DebtRow>();
@@ -150,11 +151,13 @@ export function fakeEngine(routeResult: unknown = { intent: "unknown" }, transcr
   const calls: string[] = [];
   /** What each voice reply said. */
   const spoken: string[] = [];
-  const engine: EngineApi & { routeResult: unknown } = {
+  const engine: EngineApi & { routeResult: unknown; heardLang: Lang | null } = {
     routeResult,
-    async transcribe() {
+    /** Set to make the next voice notes sound like another language. */
+    heardLang: null,
+    async transcribe(_audio, _mime, lang) {
       calls.push("transcribe");
-      return { text: transcript, seconds: 4.2 };
+      return { text: transcript, seconds: 4.2, lang: engine.heardLang ?? lang };
     },
     async route() {
       calls.push("route");

@@ -9,6 +9,7 @@ __pycache__/
 .pytest_cache/
 engine/models/
 engine/eval/
+engine/listen/
 *.gguf
 *.ckpt
 *.wav

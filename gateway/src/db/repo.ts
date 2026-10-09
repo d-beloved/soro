@@ -22,6 +22,8 @@ export interface TxnRow {
   category: string | null;
 }
 
+export type TxnPatch = Partial<Pick<TxnRow, "kind" | "item" | "amount_ngn" | "counterparty" | "category">>;
+
 export interface UserRow {
   id: string;
   language: Lang | null;
@@ -87,7 +89,7 @@ export interface Repo {
   /** The user's most recent record that has not been undone. */
   lastTransaction(userId: string): Promise<TxnRow | null>;
   voidTransaction(id: string): Promise<void>;
-  updateTransactionAmount(id: string, amountNgn: number): Promise<void>;
+  updateTransaction(id: string, patch: TxnPatch): Promise<void>;
   debts(userId: string): Promise<DebtRow[]>;
   setBudget(userId: string, category: string, amountNgn: number): Promise<void>;
   budgets(userId: string): Promise<{ category: string; amount_ngn: number }[]>;
@@ -204,8 +206,8 @@ export function createRepo(url: string, serviceRoleKey: string): Repo {
       check(await db.from("transactions").update({ voided_at: new Date().toISOString() }).eq("id", id));
     },
 
-    async updateTransactionAmount(id, amountNgn) {
-      check(await db.from("transactions").update({ amount_ngn: amountNgn }).eq("id", id));
+    async updateTransaction(id, patch) {
+      check(await db.from("transactions").update(patch).eq("id", id));
     },
 
     async debts(userId) {

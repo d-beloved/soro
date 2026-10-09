@@ -1,47 +1,80 @@
-"""YarnGPT2 text-to-speech (Nigerian-accented English, Yoruba, Igbo, Hausa)."""
+"""OmniVoice text-to-speech: the Yoruba fine-tune in its own voice, base OmniVoice with a fixed voice for the rest."""
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 
 import numpy as np
 
-from .config import TTS_LANG, TTS_REPO, TTS_SAMPLE_RATE, TTS_VOICE, WAV_CKPT, WAV_CONFIG, YARNGPT_PARENT, Lang
-from .text import clean_for_speech, split_sentences
+from .config import (
+    LANGS,
+    TTS_INSTRUCT,
+    TTS_REPOS,
+    TTS_SAMPLE_RATE,
+    TTS_SEED,
+    VOICES_DIR,
+    Lang,
+)
+from .text import clean_for_speech
 
-_GAP = np.zeros(int(TTS_SAMPLE_RATE * 0.18), dtype=np.float32)
+log = logging.getLogger("soro_engine")
+
+
+def model_dir(repo: str, revision: str) -> str:
+    """The local snapshot setup_models downloaded (no network once HF_HUB_OFFLINE is set)."""
+    from huggingface_hub import snapshot_download
+
+    from .config import TTS_FILES
+
+    return snapshot_download(repo, revision=revision, allow_patterns=TTS_FILES)
+
+
+def load_models(device: str) -> dict[Lang, object]:
+    import torch
+    from omnivoice import OmniVoice
+
+    dtype = torch.float16 if device == "cuda" else torch.float32  # the T4 has no bfloat16
+    loaded: dict[tuple[str, str], object] = {}
+    for key in dict.fromkeys(TTS_REPOS.values()):
+        loaded[key] = OmniVoice.from_pretrained(model_dir(*key), device_map=device, dtype=dtype)
+    return {lang: loaded[TTS_REPOS[lang]] for lang in LANGS}
+
+
+def voice_path(lang: Lang):
+    return VOICES_DIR / f"{lang}.pt"
 
 
 class TTS:
-    def __init__(self):
+    def __init__(self, device: str):
         import torch
-        from transformers import AutoModelForCausalLM
+        from omnivoice import VoiceClonePrompt
 
-        sys.path.insert(0, str(YARNGPT_PARENT))
-        from yarngpt.audiotokenizer import AudioTokenizerV2  # cloned repo, pinned in config.YARNGPT_COMMIT
-
-        # YarnGPT picks CUDA if available, else CPU (no MPS support).
-        self._tok = AudioTokenizerV2(TTS_REPO, str(WAV_CKPT), str(WAV_CONFIG))
-        self._model = AutoModelForCausalLM.from_pretrained(TTS_REPO, torch_dtype="auto").to(self._tok.device)
-        self._model.eval()
         self._torch = torch
-        self._lock = threading.Lock()  # the tokenizer keeps per-call state (input_length)
+        self._models = load_models(device)
+        self._voices = {}
+        for lang in LANGS:
+            if TTS_SEED[lang] is None:  # the model's own voice on every reply
+                continue
+            if voice_path(lang).exists():
+                self._voices[lang] = VoiceClonePrompt.load(str(voice_path(lang)))
+            else:  # a designed voice still works, but it changes from reply to reply
+                log.warning("no saved %s voice at %s: run setup_models", lang, voice_path(lang))
+        self._lock = threading.Lock()  # one GPU, and generate() is not documented as thread-safe
 
     def speak(self, text: str, lang: Lang) -> np.ndarray:
-        pieces: list[np.ndarray] = []
-        for chunk in split_sentences(clean_for_speech(text)):
-            with self._lock, self._torch.inference_mode():
-                prompt = self._tok.create_prompt(chunk, lang=TTS_LANG[lang], speaker_name=TTS_VOICE[lang])
-                input_ids = self._tok.tokenize_prompt(prompt)
-                output = self._model.generate(
-                    input_ids=input_ids, temperature=0.1, repetition_penalty=1.1, max_length=4000
-                )
-                codes = self._tok.get_codes(output)
-                audio = self._tok.get_audio(codes)
-            pieces.extend([audio.squeeze().float().numpy(), _GAP])
-        if not pieces:
+        spoken = clean_for_speech(text, lang)
+        if not spoken:
             raise ValueError("nothing speakable in text")
-        return np.concatenate(pieces)
+        voice = self._voices.get(lang)
+        with self._lock, self._torch.inference_mode():
+            # Long replies are chunked by OmniVoice itself (about 15 s per chunk), all in the same voice.
+            audio = self._models[lang].generate(
+                text=spoken,
+                language=lang,
+                voice_clone_prompt=voice,
+                instruct=None if voice else TTS_INSTRUCT[lang],
+            )[0]
+        return np.asarray(audio, dtype=np.float32)
 
     sample_rate = TTS_SAMPLE_RATE

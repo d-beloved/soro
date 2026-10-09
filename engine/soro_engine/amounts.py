@@ -10,7 +10,11 @@ Understood:
 - Hausa / Igbo / Yoruba, where the multiplier comes first: "dubu saba'in da biyar" (75,000),
   "puku iri ise" (50,000), "ẹgbẹ̀rún lọ́nà ọgbọ̀n" / "egberun marun" (30,000 / 5,000), "ẹgbàá mẹ́ta" (6,000).
   Tone marks are ignored, so ASR output with or without diacritics both work.
-Not understood (the model's figure is kept): Yoruba subtractive forms like "ẹ̀ẹ́dógún" (15).
+- Yoruba as numwords.py speaks it: "ẹgbẹ̀rún lọ́nà ọgọ́rùn-ún ó lé márùndínlọ́gbọ̀n" (125,000), "ẹgbẹ̀rún méjìlá àti
+  ẹ̀ẹ́dẹ́gbẹ̀ta" (12,500), with the additive/subtractive words for 13-99 ("méjìlélógójì" 42, "márùndínlọ́gọ́rin" 75).
+- Yoruba as the ASR mishears it: one letter off ("márùndínlọ́gárin", "mílíọ̀lù", "rẹ̀gbẹ̀rún"), a word split in two
+  ("márùndú lọ́gbọ̀n") or two run together ("ẹgbẹ̀rúnlọ́nà"). A near miss is only read when it is closest to a single
+  number; one that sits between two ("aadoran": aadorin 70 or aadorun 90?) is left alone.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from itertools import combinations
 
 AMOUNT_INTENTS = {"log_sale", "log_expense", "log_income", "log_debt", "debt_paid", "set_budget", "correct_last", "loan_intake"}
 
@@ -43,20 +48,34 @@ _BASIC = {
     "kan": 1, "okan": 1, "ookan": 1, "meji": 2, "eji": 2, "eeji": 2, "meta": 3, "eta": 3, "eeta": 3,
     "merin": 4, "erin": 4, "eerin": 4, "marun": 5, "arun": 5, "aarun": 5, "mefa": 6, "efa": 6, "eefa": 6,
     "meje": 7, "eje": 7, "eeje": 7, "mejo": 8, "ejo": 8, "eejo": 8, "mesan": 9, "esan": 9, "eesan": 9,
-    "mewa": 10, "mewaa": 10, "ewa": 10, "eewa": 10, "mokanla": 11, "mejila": 12,
+    "mewa": 10, "mewaa": 10, "ewa": 10, "eewa": 10, "mokanla": 11, "mejila": 12, "metala": 13, "merinla": 14,
+    "eedogun": 15,
     "ogun": 20, "ogbon": 30, "ogoji": 40, "aadota": 50, "adota": 50, "ogota": 60, "aadorin": 70, "adorin": 70,
     "ogorin": 80, "aadorun": 90, "adorun": 90, "igba": 200, "oodunrun": 300, "irinwo": 400,
-    "eedegbeta": 500, "egbeta": 600, "eedegberin": 700, "egberin": 800, "eedegbesan": 900,
+    "eedegbeta": 500, "egbeta": 600, "eedegberin": 700, "egberin": 800, "eedegberun": 900,
 }
 _TEN_TIMES = {"iri": 10}  # Igbo: "iri ise" = 50
 _HUNDRED = {"dari": 100, "nari": 100, "ogorun": 100}  # "dari biyu" = 200
-_BIG = {"dubu": 1000, "puku": 1000, "egberun": 1000, "egbaa": 2000, "miliyan": 1_000_000, "milionu": 1_000_000,
-        "oke": 20_000, "nde": 1_000_000}
+_BIG = {"dubu": 1000, "puku": 1000, "egberun": 1000, "igberun": 1000, "egbaa": 2000, "miliyan": 1_000_000,
+        "milionu": 1_000_000, "oke": 20_000, "nde": 1_000_000}  # "igberun": how the Yoruba ASR sometimes spells it
 _BIG_NEEDS_COUNT = {"oke", "nde"}  # also everyday words ("up", "people"): only an amount with a number after them
+_ONE_BEFORE = {"otu"}  # Igbo "otu puku", "otu nde"
 _TEENS_JOIN = {"sha"}  # Hausa "goma sha biyar" = 15
 _JOIN = {"da", "na", "le", "ati", "and"}
 _SKIP_AFTER_BIG = {"naira", "lona", "n"}  # "puku naira iri ise", "egberun lona ogbon"
 _CURRENCY = {"naira", "₦", "n"}
+
+# Yoruba 13-99 in one word: a unit added to ("le") or taken from ("din") a ten, which takes an "l-" ("lọ́gbọ̀n").
+# The ASR also writes "lí" for "lé" and "dú"/"dí" for "dín", so any "l"/"d" joining syllable is read by its first letter.
+_YO_COMPOUND = re.compile(r"(mokan|okan|meji|eji|meta|eta|merin|erin|marun|arun)(l[ei]|d[a-z]{0,2}?)l(\w+)")
+_YO_STEM = {"mokan": 1, "okan": 1, "meji": 2, "eji": 2, "meta": 3, "eta": 3, "merin": 4, "erin": 4, "marun": 5, "arun": 5}
+_YO_TENS = {w: {**_BASIC, **_HUNDRED}[w] for w in "ogun ogbon ogoji aadota adota ogota aadorin adorin ogorin aadorun adorun ogorun".split()}
+# Yoruba number words long enough to tell apart with one letter wrong. Shorter ones ("eta", "efa") are too close to
+# each other and to everyday words.
+_YO_LONG = {w: v for w, v in {**_BASIC, **_HUNDRED, **_BIG}.items() if len(w) >= 6 and w in (
+    "mokanla mejila metala merinla eedogun aadota ogota aadorin ogorin aadorun ogorun oodunrun irinwo eedegbeta "
+    "egbeta eedegberin egberin eedegberun egberun milionu").split()}
+_YO_BIG_ALONE = {"egberun", "milionu"}  # may be run together with "lọ́nà": "ẹgbẹ̀rúnlọ́nà"
 
 _TOKEN = re.compile(r"₦|\d+(?:\.\d+)?(?:[km](?![a-z]))?|[a-z']+")
 
@@ -73,7 +92,85 @@ def _normalise(text: str) -> str:
     t = "".join(c for c in unicodedata.normalize("NFD", t) if not unicodedata.combining(c))
     t = re.sub(r"(?<=\d),(?=\d{3}\b)", "", t)  # 10,000 -> 10000
     t = re.sub(r"(?<![a-z])n\s?(?=\d)", "n ", t)  # N5000 -> n 5000
+    t = re.sub(r"(?<=[a-z])-(?:un|an)\b", "", t)  # Yoruba "ọgọ́rùn-ún", "márùn-ún" -> ogorun, marun
     return t
+
+
+def _dist(a: str, b: str) -> int:
+    """Edit distance: letters inserted, dropped or changed."""
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _near(tok: str, words: dict[str, int]) -> str | None:
+    """The one word in `words` that `tok` is one letter away from, if all such closest words mean the same number."""
+    best: list[str] = []
+    for w in words:
+        d = _dist(tok, w)
+        if d <= 1 and (not best or d < _dist(tok, best[0])):
+            best = [w]
+        elif d <= 1 and d == _dist(tok, best[0]):
+            best.append(w)
+    return best[0] if best and len({words[w] for w in best}) == 1 else None
+
+
+def _num(tok: str) -> int | None:
+    """A Hausa/Igbo/Yoruba number word below 1000."""
+    if tok in _BASIC:
+        return _BASIC[tok]
+    m = _YO_COMPOUND.fullmatch(tok)
+    if m:
+        tail = m.group(3)  # "lọ́gbọ̀n" -> ogbon; "láàádọ́ta" -> aadota (the "l-" brings its own vowel)
+        tails = (tail, tail[1:])
+        ten = next((_YO_TENS[w] for w in tails if w in _YO_TENS), None)
+        if ten is None:  # "lọ́gárin" for "lọ́gọ́rin"
+            ten = next((_YO_TENS[n] for w in tails if len(w) >= 4 and (n := _near(w, _YO_TENS))), None)
+        if ten is not None:
+            return ten + _YO_STEM[m.group(1)] * (1 if m.group(2)[0] == "l" else -1)
+    return None
+
+
+def _known(tok: str) -> bool:
+    return (tok in _BASIC or tok in _BIG or tok in _HUNDRED or tok in _TEN_TIMES or tok in _JOIN or tok in _CURRENCY
+            or tok in _SKIP_AFTER_BIG or tok in _EN_SMALL or tok in _EN_TENS or tok in _EN_SCALE
+            or _digit(tok) is not None or _num(tok) is not None)
+
+
+def _mend(toks: list[str]) -> list[str]:
+    """Puts Yoruba number words the ASR misheard back together, see the module docstring."""
+    out: list[str] = []
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if _known(t):
+            out.append(t)
+            i += 1
+            continue
+        if i + 1 < len(toks) and not _known(toks[i + 1]) and _num(t + toks[i + 1]) is not None:  # "márùndú lọ́gbọ̀n"
+            out.append(t + toks[i + 1])
+            i += 2
+            continue
+        if t.endswith("lona") and (head := t[:-4]) and (head in _YO_BIG_ALONE or _near(head, _YO_LONG) in _YO_BIG_ALONE):
+            out += [head if head in _YO_BIG_ALONE else _near(head, _YO_LONG), "lona"]  # "ẹgbẹ̀rúnlọ́nà"
+            i += 1
+            continue
+        out.append((len(t) >= 6 and _near(t, _YO_LONG)) or t)  # "mílíọ̀lù", "rẹ̀gbẹ̀rún", "ọ̀dúnrún"
+        i += 1
+    return out
+
+
+def _join_at(toks: list[str], j: int) -> int:
+    """How many tokens of joining word start at j: "da", "na", "àti", or Yoruba "ó lé" (2). 0 if none."""
+    if j < len(toks) and toks[j] in _JOIN:
+        return 1
+    if j + 1 < len(toks) and toks[j] == "o" and toks[j + 1] == "le":
+        return 2
+    return 0
 
 
 def _digit(tok: str) -> float | None:
@@ -91,14 +188,18 @@ def _small(toks: list[str], i: int) -> tuple[int, int]:
     while j < len(toks):
         t = toks[j]
         if t in _HUNDRED and first:
-            n, k = _small(toks, j + 1)
-            total, j = 100 * (n or 1), k
+            # "dari uku" = 300; the count is a single digit, so "dari uku da hamsin" is 350, not 100 x 53
+            n = _num(toks[j + 1]) if j + 1 < len(toks) else None
+            if n and n < 10:
+                total, j = 100 * n, j + 2
+            else:
+                total, j = 100, j + 1
         elif t in _TEN_TIMES:
-            n = _BASIC.get(toks[j + 1]) if j + 1 < len(toks) else None
+            n = _num(toks[j + 1]) if j + 1 < len(toks) else None
             total += 10 * (n if n and n < 10 else 1)
             j += 2 if n and n < 10 else 1
-        elif t in _BASIC:
-            total += _BASIC[t]
+        elif (n := _num(t)) is not None and (first or n < 100):
+            total += n
             j += 1
             if j + 1 < len(toks) and toks[j] in _TEENS_JOIN and toks[j + 1] in _BASIC:
                 total += _BASIC[toks[j + 1]]
@@ -108,32 +209,41 @@ def _small(toks: list[str], i: int) -> tuple[int, int]:
         else:
             break
         first = False
-        # "saba'in da biyar", "iri abuo na ise", "ogun le marun": keep adding, but not into a new hundreds group
-        if j + 1 < len(toks) and toks[j] in _JOIN and (toks[j + 1] in _BASIC or toks[j + 1] in _TEN_TIMES):
-            j += 1
+        # "saba'in da biyar", "iri abuo na ise", "irinwo o le marun": keep adding, but not into a new hundreds group
+        # ("egberun mejila ati eedegbeta" is 12,000 + 500, not 512,000). Yoruba "àti" always starts a new group.
+        nxt = j + (_join_at(toks, j) if j < len(toks) and toks[j] != "ati" else 0)
+        if nxt > j and nxt < len(toks) and (((n := _num(toks[nxt])) is not None and n < 100) or toks[nxt] in _TEN_TIMES):
+            j = nxt
             continue
         break
     return total, j
 
 
-def _multiplier_first(toks: list[str], i: int) -> tuple[int, int]:
-    """'dubu biyar da dari biyu' = 5,200; 'egberun lona ogbon' = 30,000. Starts on a _BIG or _HUNDRED word."""
+def _multiplier_first(toks: list[str], i: int, one_before: bool = False) -> tuple[int, int]:
+    """'dubu biyar da dari biyu' = 5,200; 'egberun lona ogbon' = 30,000. Starts on a _BIG or _HUNDRED word.
+    `one_before`: the count came first, as Igbo does with one ("otu nde" = 1,000,000)."""
     t = toks[i]
-    if t in _HUNDRED:
+    if t in _HUNDRED or (_num(t) or 0) >= 100:  # "dari biyu", Yoruba "ẹ̀ẹ́dẹ́gbẹ̀ta"
         n, j = _small(toks, i)
         return n, j
     j = i + 1
     while j < len(toks) and toks[j] in _SKIP_AFTER_BIG:
         j += 1
-    n, k = _small(toks, j)
+    n, k = (1, i + 1) if one_before else _small(toks, j)
     if not n:
         if t in _BIG_NEEDS_COUNT:
             return 0, i + 1
         n, k = 1, i + 1
     value = _BIG[t] * n
     # "... da dari biyu" / "... na nari ato" / "... da dubu ..." : a lower group added on
-    if k + 1 < len(toks) and toks[k] in _JOIN and (toks[k + 1] in _HUNDRED or toks[k + 1] in _BIG):
-        extra, k2 = _multiplier_first(toks, k + 1)
+    nxt = k + _join_at(toks, k)
+    lower = nxt > k and nxt < len(toks) and (toks[nxt] in _HUNDRED or toks[nxt] in _BIG or (_num(toks[nxt]) or 0) >= 100)
+    if lower:
+        extra, k2 = _multiplier_first(toks, nxt)
+        if extra and extra < value:
+            value, k = value + extra, k2
+    elif nxt > k and toks[k] == "ati" and nxt < len(toks) and _num(toks[nxt]):  # "ẹgbẹ̀rún méjì àti márùn-ún" = 2,005
+        extra, k2 = _small(toks, nxt)
         if extra and extra < value:
             value, k = value + extra, k2
     return value, k
@@ -174,16 +284,24 @@ def _english(toks: list[str], i: int) -> tuple[float, int, bool]:
 
 
 def candidates(text: str) -> list[Candidate]:
-    toks = _TOKEN.findall(_normalise(text))
+    toks = _mend(_TOKEN.findall(_normalise(text)))
     out: list[Candidate] = []
     i = 0
     while i < len(toks):
         t = toks[i]
         before = toks[i - 1] if i else ""
-        if t in _BIG or t in _HUNDRED:
-            value, j = _multiplier_first(toks, i)
+        one_before = t in _ONE_BEFORE and i + 1 < len(toks) and toks[i + 1] in _BIG
+        if t in _BIG or t in _HUNDRED or one_before:
+            value, j = _multiplier_first(toks, i + 1, one_before=True) if one_before else _multiplier_first(toks, i)
+            t = toks[i + 1] if one_before else t
             after = toks[j] if j < len(toks) else ""
             if value and (t in _BIG or before in _CURRENCY or after == "naira"):
+                out.append(Candidate(value, strong=True))
+            i = max(j, i + 1)
+            continue
+        if before in ("naira", "₦") and (_num(t) is not None or t in _TEN_TIMES):  # "náírà ẹ̀ẹ́dẹ́gbẹ̀ta", "naira biyar": below a thousand
+            value, j = _small(toks, i)
+            if value:
                 out.append(Candidate(value, strong=True))
             i = max(j, i + 1)
             continue
@@ -214,7 +332,8 @@ def extract_amount_ngn(text: str) -> int | None:
 
 
 def reconcile_amount(result: dict, text: str) -> dict:
-    """Keep the model's amount_ngn only if it is one the message contains; otherwise use the parsed one."""
+    """Keep the model's amount_ngn only if the message accounts for it; otherwise use the parsed one.
+    Record intents also get other_amounts: the amounts the record leaves out (see other_amounts())."""
     if result.get("intent") not in AMOUNT_INTENTS:
         return result
     qty = result.get("quantity")
@@ -225,10 +344,53 @@ def reconcile_amount(result: dict, text: str) -> dict:
         return result  # nothing we can read (or a number form we don't parse): trust the model
     pool = [c.value for c in cands if c.strong] or [c.value for c in cands]
     llm = result.get("amount_ngn")
-    if isinstance(llm, (int, float)) and llm > 0:
-        plausible = {*pool, sum(pool)}
-        if isinstance(qty, (int, float)) and qty > 1:
-            plausible |= {v * qty for v in pool}  # "2 bags at 25k each" -> 50000
-        if any(abs(llm - v) < 0.5 for v in plausible):
-            return result
-    return {**result, "amount_ngn": best}
+    if not (isinstance(llm, (int, float)) and llm > 0 and _accounted(llm, pool, qty)):
+        result = {**result, "amount_ngn": best}
+    if result["intent"] in MULTI_CHECK:
+        others = other_amounts(result["amount_ngn"], pool, qty)
+        if others:
+            result = {**result, "other_amounts": others}
+    return result
+
+
+# Intents that save one record, where a second amount in the message is most likely a second record.
+# Corrections ("not 5k, 7k"), repayments ("paid 5k of the 10k") and loans ("200k, 20k a month") name
+# several amounts by nature, and budgets are one figure.
+MULTI_CHECK = {"log_sale", "log_expense", "log_income", "log_debt"}
+_MAX_GROUP = 8  # groups are tried exhaustively; nobody says more amounts than this in one message
+
+
+def _group(recorded: float, values: list[int]) -> tuple[int, ...] | None:
+    """The largest group of `values` (by index) adding up to `recorded`: "rice 5k, beans 3k, fuel 2k" recorded
+    as 8k is the rice and the beans."""
+    if len(values) > _MAX_GROUP:
+        return (*range(len(values)),) if abs(sum(values) - recorded) < 0.5 else None
+    for size in range(len(values), 0, -1):
+        for group in combinations(range(len(values)), size):
+            if abs(sum(values[k] for k in group) - recorded) < 0.5:
+                return group
+    return None
+
+
+def _unit_price(v: float, recorded: float, qty: float | None) -> bool:
+    """"2 bags at 25k each" recorded as 50k."""
+    return isinstance(qty, (int, float)) and qty > 1 and abs(v * qty - recorded) < 0.5
+
+
+def _accounted(recorded: float, values: list[int], qty: float | None) -> bool:
+    return _group(recorded, values) is not None or any(_unit_price(v, recorded, qty) for v in values)
+
+
+def other_amounts(recorded: float, values: list[int], qty: float | None = None) -> list[int]:
+    """The amounts in a message that the recorded one doesn't account for, so the user can be told they weren't saved.
+
+    The router saves one record per message, so "rice 5k, beans 3k, and I bought fuel 2k" saves the 8k of sales
+    and the fuel is lost. An amount is accounted for when it is part of the recorded figure: the figure itself, one
+    of a group of amounts adding up to it, or a unit price times the quantity.
+    """
+    if len(values) < 2 or len(values) > _MAX_GROUP:
+        return []
+    group = _group(recorded, values) or ()
+    left = [v for k, v in enumerate(values) if k not in group and not _unit_price(v, recorded, qty)]
+    # a repeated figure ("5k, yes 5k") is the record said twice, not a second one
+    return sorted({v for v in left if abs(v - recorded) >= 0.5}, key=left.index)

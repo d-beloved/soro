@@ -52,19 +52,22 @@ class SoroEngine:
         if self.parts.tts:
             from .tts import TTS
 
-            self.tts = TTS()
-            log.info("TTS loaded (%.1fs)", time.time() - t0)
+            self.tts = TTS(device)
+            log.info("TTS loaded on %s (%.1fs)", device, time.time() - t0)
 
     def status(self) -> dict:
         return {"asr": self.asr is not None, "llm": self.llm is not None, "tts": self.tts is not None}
 
     # --- operations -------------------------------------------------------
 
-    def transcribe(self, data: bytes, lang: Lang) -> dict:
+    def transcribe(self, data: bytes, lang: Lang, detect: bool = False) -> dict:
+        """`lang` is the user's chosen language. With `detect`, a voice note in another of the four is heard by
+        that language's model instead, and "lang" in the result says which one."""
         if self.asr is None:
             raise RuntimeError("ASR not loaded")
         audio = decode_to_16k(data)
-        return {"text": self.asr.transcribe(audio, lang), "seconds": round(audio.size / ASR_SAMPLE_RATE, 2)}
+        text, heard = self.asr.transcribe(audio, lang, detect=detect)
+        return {"text": text, "lang": heard, "seconds": round(audio.size / ASR_SAMPLE_RATE, 2)}
 
     def route(self, text: str, lang: Lang, today: str) -> dict:
         if self.llm is None:

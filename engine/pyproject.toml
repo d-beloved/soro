@@ -1,25 +1,22 @@
 [project]
 name = "soro-engine"
 version = "0.1.0"
-description = "SoroEngine GPU engine: NCAIR ASR + N-ATLaS + YarnGPT2 behind a small HTTP API"
+description = "SoroEngine GPU engine: NCAIR ASR + N-ATLaS + OmniVoice behind a small HTTP API"
 requires-python = ">=3.11,<3.13"
 dependencies = [
   "fastapi[standard]>=0.115",
   "numpy",
   "huggingface_hub",
-  "gdown",
   "httpx",
 ]
 
 [project.optional-dependencies]
-# Heavy model stack. YarnGPT pins transformers 4.47.1 and outetts 0.2.3.
+# Heavy model stack, same pins as the Modal image in modal_app.py.
 ml = [
-  "torch==2.5.1",
-  "torchaudio==2.5.1",
-  "transformers==4.47.1",
-  "outetts==0.2.3",
-  "uroman",
-  "inflect",
+  "torch==2.6.0",
+  "torchaudio==2.6.0",
+  "transformers==5.14.1",
+  "omnivoice==0.2.1",
   "accelerate",
   "llama-cpp-python==0.3.36",
   "modal",

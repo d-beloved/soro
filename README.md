@@ -20,7 +20,7 @@ Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on Ren
                                       └──▶ engine/  (FastAPI on Modal, T4 GPU)
                                              • ASR: NCAIR Nigerian-accented English, Yoruba, Hausa, Igbo (Whisper-small)
                                              • LLM: N-ATLaS (Llama-3 8B) as GGUF Q4_K_M via llama.cpp: intent routing, tip adaptation, translation
-                                             • TTS: YarnGPT2 → Opus voice note
+                                             • TTS: OmniVoice (Yoruba fine-tune for Yoruba) → Opus voice note
 Landing page, privacy, terms ─────── site/  (static, Cloudflare Pages → soro.charavol.com)
 ```
 
@@ -111,6 +111,6 @@ Yoruba, Hausa and Igbo strings and tips are hand-translated from the English. A 
 
 - **N-ATLaS** is an initiative of the Federal Ministry of Communications, Innovation and Digital Economy, and powered by Awarri Technologies. Its licence caps free use at 1,000 active users per 30 days.
 - Speech recognition: NCAIR models on Hugging Face (`NCAIR1/NigerianAccentedEnglish`, `NCAIR1/Yoruba-ASR`, `NCAIR1/Hausa-ASR`, `NCAIR1/Igbo-ASR`).
-- Text-to-speech: [YarnGPT2](https://huggingface.co/saheedniyi/YarnGPT2) with WavTokenizer.
+- Text-to-speech: [OmniVoice](https://huggingface.co/k2-fsa/OmniVoice) (Apache-2.0), and for Yoruba its fine-tune [Sam4rano/omnivoice-yoruba-tts](https://huggingface.co/Sam4rano/omnivoice-yoruba-tts) (Apache-2.0).
 
 © 2026 Charavol Technologies Ltd.

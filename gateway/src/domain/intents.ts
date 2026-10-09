@@ -52,6 +52,9 @@ export const CATEGORIES = [
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
+/** What a correction can turn the last record into. */
+export const RECORD_INTENTS = ["log_sale", "log_expense", "log_income", "log_debt", "debt_paid"] as const;
+
 export const isBusinessCategory = (c: string | null | undefined): boolean => c === "goods" || c === "business_costs";
 
 const optStr = z
@@ -77,6 +80,14 @@ export const Intent = z.object({
   topic: z.enum(TIP_TOPICS).nullish().catch(null).transform((v) => v ?? null),
   question: optStr,
   purpose: optStr,
+  /** correct_last only: the right kind of record, when the user says the kind was wrong. */
+  correct_to: z.enum(RECORD_INTENTS).nullish().catch(null).transform((v) => v ?? null),
+  /** Set by the engine, not the model: amounts in the message that the one record leaves out. */
+  other_amounts: z
+    .array(z.unknown())
+    .nullish()
+    .catch(null)
+    .transform((v) => (v ?? []).map(parseNaira).filter((n): n is number => n != null && n > 0)),
 });
 export type Intent = z.infer<typeof Intent>;
 

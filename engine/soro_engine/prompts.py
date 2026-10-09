@@ -20,6 +20,8 @@ CATEGORIES = [
     "goods", "business_costs", "food", "transport", "data_airtime", "rent_bills", "family",
     "health", "school", "fun", "clothing", "savings", "other",
 ]
+# What a correction can turn the last record into.
+RECORD_INTENTS = ["log_sale", "log_expense", "log_income", "log_debt", "debt_paid"]
 
 _str = {"type": ["string", "null"]}
 _num = {"type": ["number", "null"]}
@@ -40,6 +42,7 @@ ROUTER_SCHEMA = {
         "topic": {"enum": [*TOPICS, None]},
         "question": _str,
         "purpose": _str,
+        "correct_to": {"enum": [*RECORD_INTENTS, None]},
     },
     "required": ["intent"],
 }
@@ -78,16 +81,26 @@ def category_messages(text: str) -> list[dict]:
 
 
 def tidy_route(result: dict) -> dict:
-    """Keep "category" only on intents that use it, and only if it is a known one."""
+    """Keep "category" only on intents that use it (and corrections), and only if it is a known one;
+    keep "correct_to" only on corrections."""
+    intent = result.get("intent")
     if result.get("category") is not None and (
-        result.get("intent") not in CATEGORY_INTENTS or result["category"] not in CATEGORIES
+        (intent not in CATEGORY_INTENTS and intent != "correct_last") or result["category"] not in CATEGORIES
     ):
-        return {**result, "category": None}
+        result = {**result, "category": None}
+    if result.get("correct_to") is not None and (intent != "correct_last" or result["correct_to"] not in RECORD_INTENTS):
+        result = {**result, "correct_to": None}
     return result
 
 
 def needs_category(result: dict) -> bool:
-    return result.get("intent") in CATEGORY_INTENTS and result.get("category") is None
+    if result.get("category") is not None:
+        return False
+    if result.get("intent") == "correct_last":
+        # Only when the correction turns the record into a spend and says what it was ("na tithe I pay");
+        # "no be income, na expense" alone gives the category call nothing to go on.
+        return result.get("correct_to") == "log_expense" and bool(result.get("item"))
+    return result.get("intent") in CATEGORY_INTENTS
 
 
 ROUTER_SYSTEM = """You are the message router for Sọ̀rọ̀, a WhatsApp money-records and money-tips assistant for people in Nigeria:
@@ -106,7 +119,7 @@ Return ONE JSON object. Fields:
   summary_query (asks how much they sold/spent/earned, profit, who owes them, where their money went),
   set_budget (sets a spending limit for a category, per month),
   undo_last (cancel or remove the last thing recorded),
-  correct_last (the last record had a wrong amount; amount_ngn is the right one),
+  correct_last (the user says the last record was wrong; fill only what they fixed, see correct_to),
   loan_intake (wants a loan or credit),
   ask_question (any question about money, saving, budgeting, pricing, debt, records, loans), greeting, help, unknown.
 - item, quantity, unit: the goods or thing, e.g. item "rice", quantity 3, unit "bags".
@@ -124,6 +137,9 @@ Return ONE JSON object. Fields:
 - topic (ask_question only): one of separate_money, record_keeping, cash_flow, debt_recovery, credit_readiness, savings, pricing.
 - question (ask_question only): the question, rewritten clearly in English.
 - purpose (loan_intake only): what the loan is for, in English.
+- correct_to (correct_last only): the right kind of record when the user says the kind was wrong, e.g. "no be sale,
+  na expense" = log_expense; one of log_sale, log_expense, log_income, log_debt, debt_paid. Null if the kind was right.
+  A correction can fix several things at once: amount_ngn, item, category, counterparty, direction and correct_to.
 Use null for anything not said. Never invent amounts."""
 
 FEW_SHOT: list[tuple[str, dict]] = [
@@ -171,6 +187,14 @@ FEW_SHOT: list[tuple[str, dict]] = [
      {"intent": "undo_last"}),
     ("no be 5k, na 50k",
      {"intent": "correct_last", "amount_ngn": 50000}),
+    ("no, that one no be income. Na tithe I pay, 135,100",
+     {"intent": "correct_last", "correct_to": "log_expense", "item": "tithe", "amount_ngn": 135100}),
+    ("e no be food, na transport",
+     {"intent": "correct_last", "category": "transport"}),
+    ("na Emeka, no be Chidi. And e be 7k",
+     {"intent": "correct_last", "counterparty": "Emeka", "amount_ngn": 7000}),
+    ("I no sell am, na money I collect from my sister",
+     {"intent": "correct_last", "correct_to": "log_income", "counterparty": "sister"}),
     ("I need loan of 200k to buy more goods",
      {"intent": "loan_intake", "amount_ngn": 200000, "purpose": "buy more goods"}),
     ("How I go take save money when market slow",
@@ -185,6 +209,8 @@ FEW_SHOT: list[tuple[str, dict]] = [
      {"intent": "log_expense", "item": "rice", "quantity": 1, "unit": "agolo", "amount_ngn": 10000, "category": "food"}),
     ("Pa èyí tí mo sọ kẹ́yìn rẹ́",
      {"intent": "undo_last"}),
+    ("Kì í ṣe owó tí mo gbà, owó tí mo ná ni, ẹgbẹ̀rún mẹ́wàá",
+     {"intent": "correct_last", "correct_to": "log_expense", "amount_ngn": 10000}),
     ("Báwo ni mo ṣe lè fi owó pamọ́",
      {"intent": "ask_question", "topic": "savings", "question": "How can I save money?"}),
     # Hausa (draft)
@@ -194,6 +220,8 @@ FEW_SHOT: list[tuple[str, dict]] = [
      {"intent": "log_debt", "counterparty": "Musa", "amount_ngn": 5000, "direction": "owed_to_me"}),
     ("Musa ya biya ni dubu biyar",
      {"intent": "debt_paid", "counterparty": "Musa", "amount_ngn": 5000, "direction": "owed_to_me"}),
+    ("Ba dubu biyar ba ne, dubu hamsin ne",
+     {"intent": "correct_last", "amount_ngn": 50000}),
     ("Na sayar da rice bags biyu 50k",
      {"intent": "log_sale", "item": "rice", "quantity": 2, "unit": "bags", "amount_ngn": 50000}),
     # Igbo (draft)

@@ -1,0 +1,54 @@
+# Every morning: list what users corrected or the bot could not understand in the last day, and email it.
+# No AI involved: gateway/src/scripts/reviewCorrections.ts reads Supabase and writes a Markdown report.
+# The report holds user transcripts, so it is only emailed, never uploaded as a build artifact.
+#
+# Repo secrets (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  same values as the gateway's .env
+#   MAIL_USERNAME                            the Gmail address that sends and receives the report
+#   MAIL_PASSWORD                            a Gmail app password (Google Account > Security > App passwords)
+name: Corrections report
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 07:00 Lagos
+  workflow_dispatch:
+    inputs:
+      days:
+        description: How many days back to look
+        default: "1"
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: gateway/package-lock.json
+      - run: npm ci
+      - id: review
+        run: npx tsx src/scripts/reviewCorrections.ts --days "$DAYS"
+        env:
+          DAYS: ${{ inputs.days || '1' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - if: steps.review.outputs.found != '0'
+        uses: dawidd6/action-send-mail@v22
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: Sọ̀rọ̀ reports <${{ secrets.MAIL_USERNAME }}>
+          to: ${{ secrets.MAIL_USERNAME }}
+          subject: "Sọ̀rọ̀: ${{ steps.review.outputs.found }} to review"
+          body: file://${{ steps.review.outputs.file }}
+          convert_markdown: true
