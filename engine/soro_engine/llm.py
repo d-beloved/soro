@@ -34,7 +34,9 @@ class LLM:
             out = self._llm.create_chat_completion(messages=messages, **kwargs)
         return (out["choices"][0]["message"]["content"] or "").strip()
 
-    def route(self, text: str, lang: Lang, today: str) -> dict:
+    def route(self, text: str, lang: Lang, today: str, en_text: str | None = None) -> dict:
+        """`en_text`: the English model's hearing of a yo/ha/ig voice note, see SoroEngine.transcribe."""
+        text = prompts.router_input(text, en_text)
         messages = prompts.route_messages(text, lang, today)
         raw = self.chat(messages, schema=prompts.ROUTER_SCHEMA, max_tokens=200)
         try:

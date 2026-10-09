@@ -230,6 +230,24 @@ describe("spoken language", () => {
     expect(user.language).toBe("en");
     expect(t.state.messages.at(-1)).toMatchObject({ language: "yo" });
   });
+
+  it("gives the router the English hearing of a note, but shows the note's own transcript", async () => {
+    const t = await onboarded("lang_yo");
+    t.engine.enText = "more a wunje thirteen thousand two hundred";
+    t.engine.routeResult = { intent: "log_expense", item: "food", amount_ngn: 13200, category: "food" };
+    await handleMessage(t.deps, voice());
+    expect(t.engine.routedEnText).toEqual(["more a wunje thirteen thousand two hundred"]);
+    expect(t.sent[0]!.body).toContain("I sell 3 bags of rice 75k");
+    expect(t.sent[0]!.body).not.toContain("thirteen");
+    expect(t.state.messages.at(-1).payload).toMatchObject({ amount_ngn: 13200, heard_en: "more a wunje thirteen thousand two hundred" });
+  });
+
+  it("routes text without an English hearing", async () => {
+    const t = await onboarded();
+    t.engine.enText = "ignored";
+    await handleMessage(t.deps, text("hello"));
+    expect(t.engine.routedEnText).toEqual([undefined]);
+  });
 });
 
 describe("debts paid back", () => {
@@ -411,6 +429,20 @@ describe("slow replies", () => {
     t.engine.route = async (...args) => (await wait(40), route(...args));
     await handleMessage(t.deps, text("hello"));
     expect(t.sent.map((s) => s.body)).toEqual(["⏳ Got it, one moment…", expect.stringContaining("Hello!")]);
+  });
+
+  it("waits for a voice note's language, and says it in that one", async () => {
+    const t = await onboarded("lang_yo");
+    t.deps.slowReplyMs = 5;
+    t.engine.heardLang = "en";
+    t.engine.routeResult = { intent: "greeting" };
+    const transcribe = t.engine.transcribe;
+    t.engine.transcribe = async (...args) => (await wait(40), transcribe(...args));
+    await handleMessage(t.deps, voice());
+    expect(t.sent.filter((s) => s.kind === "text").map((s) => s.body)).toEqual([
+      "⏳ Got it, one moment…",
+      expect.stringContaining("Hello!"),
+    ]);
   });
 
   it("sends no notice when the reply comes quickly", async () => {

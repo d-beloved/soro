@@ -17,6 +17,7 @@ class RouteIn(BaseModel):
     text: str = Field(max_length=2000)
     lang: Lang
     today: str
+    en_text: str | None = Field(default=None, max_length=2000)  # from /transcribe, when it sends one
 
 
 class AdaptIn(BaseModel):
@@ -70,7 +71,7 @@ def create_api(engine: SoroEngine, token: str) -> FastAPI:
 
     @app.post("/route", dependencies=[Depends(auth)])
     async def route(body: RouteIn) -> dict:
-        return {"intent": await run_in_threadpool(engine.route, body.text, body.lang, body.today)}
+        return {"intent": await run_in_threadpool(engine.route, body.text, body.lang, body.today, body.en_text)}
 
     @app.post("/adapt", dependencies=[Depends(auth)])
     async def adapt(body: AdaptIn) -> dict:

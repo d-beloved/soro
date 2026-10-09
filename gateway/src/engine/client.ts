@@ -7,13 +7,18 @@ export interface Transcription {
   seconds: number;
   /** The language the voice note was heard in; can differ from the user's chosen one. */
   lang: Lang;
+  /**
+   * A Yoruba, Hausa or Igbo note whose transcript has no amount, as the English model heard it, when that one has
+   * an amount: people often say amounts in English inside those languages. Pass it on to route().
+   */
+  enText?: string;
 }
 
 export interface EngineApi {
   /** `lang` is the user's chosen language; the engine also listens for the other three. */
   transcribe(audio: Uint8Array<ArrayBuffer>, mimeType: string, lang: Lang): Promise<Transcription>;
   /** Returns the raw router JSON; validate it with parseIntent(). */
-  route(text: string, lang: Lang, today: string): Promise<unknown>;
+  route(text: string, lang: Lang, today: string, enText?: string): Promise<unknown>;
   /** Rewrites a curated tip so it answers the trader's question, in their language. */
   adapt(input: { tip: string; question: string; lang: Lang }): Promise<string>;
   /** OGG/OPUS bytes ready for a WhatsApp voice note. */
@@ -58,12 +63,13 @@ export function createEngineClient(opts: Options): EngineApi {
   return {
     async transcribe(audio, mimeType, lang) {
       const res = await post(`/transcribe?lang=${lang}&detect=true`, audio, mimeType);
-      const body = (await res.json()) as { text: string; seconds: number; lang?: string };
+      const body = (await res.json()) as { text: string; seconds: number; lang?: string; en_text?: string };
       const heard = LANGS.find((l) => l === body.lang) ?? lang; // an older engine doesn't send it
-      return { text: body.text.trim(), seconds: body.seconds, lang: heard };
+      const enText = body.en_text?.trim();
+      return { text: body.text.trim(), seconds: body.seconds, lang: heard, ...(enText ? { enText } : {}) };
     },
-    async route(text, lang, today) {
-      return (await json("/route", { text, lang, today })).intent;
+    async route(text, lang, today, enText) {
+      return (await json("/route", { text, lang, today, ...(enText ? { en_text: enText } : {}) })).intent;
     },
     async adapt(input) {
       return (await json("/adapt", input)).text;

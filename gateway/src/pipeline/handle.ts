@@ -154,7 +154,9 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   startSlowNotice(ctx);
   const isAudio = msg.type === "audio" && !!msg.audio;
   let input: string;
+  let enText: string | undefined;
   if (isAudio) {
+    ctx.noticeWaitsForLang = true;
     const media = await deps.wa.downloadMedia(msg.audio!.id);
     const tr = await deps.engine.transcribe(media.bytes, media.mimeType, ctx.lang);
     if (tr.lang !== ctx.lang) {
@@ -169,6 +171,9 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
       return deliver(ctx, { text: t(ctx.lang, "transcribe_empty"), voice: true });
     }
     input = tr.text;
+    enText = tr.enText;
+    ctx.noticeWaitsForLang = false;
+    if (ctx.noticeDue) await sendSlowNotice(ctx);
   } else if (text) {
     out.transcript = text;
     input = text;
@@ -179,9 +184,10 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   }
 
   // 5. Understand (N-ATLaS router) and act.
-  const intent = parseIntent(await deps.engine.route(input, ctx.lang, todayWAT(ctx.now)));
+  const intent = parseIntent(await deps.engine.route(input, ctx.lang, todayWAT(ctx.now), enText));
   out.intent = intent.intent;
-  out.payload = intent;
+  // The English hearing is kept for review only; the "I heard" line shows the note's own transcript.
+  out.payload = enText ? { ...intent, heard_en: enText } : intent;
 
   let reply = await applyCommerce(ctx, intent);
   if (reply && intent.amount_ngn != null && intent.other_amounts.length > 0) reply = withOtherAmounts(ctx, reply, intent.other_amounts);
@@ -210,18 +216,27 @@ function withOtherAmounts(ctx: Ctx, reply: Reply, amounts: number[]): Reply {
   return { ...reply, text: `${reply.text}\n\n${note}`, spoken: `${reply.spoken ?? firstLine(reply.text)} ${note}` };
 }
 
-/** The engine can be slow (long voice note, busy or cold GPU): after a while, tell the user we got it. */
+/**
+ * The engine can be slow (long voice note, busy or cold GPU): after a while, tell the user we got it. During a
+ * voice note's transcription the notice waits, so it goes out in the language the note turns out to be in.
+ */
 function startSlowNotice(ctx: Ctx): void {
+  ctx.slowNotice = setTimeout(() => {
+    if (ctx.noticeWaitsForLang) ctx.noticeDue = true;
+    else void sendSlowNotice(ctx);
+  }, ctx.deps.slowReplyMs ?? SLOW_REPLY_MS);
+}
+
+async function sendSlowNotice(ctx: Ctx): Promise<void> {
   const { deps } = ctx;
-  ctx.slowNotice = setTimeout(async () => {
-    try {
-      const text = t(ctx.lang, "working");
-      await deps.wa.sendText(ctx.msg.from, text);
-      await deps.repo.insertOutbound({ user_id: ctx.user.id, type: "text", language: ctx.lang, payload: { text } });
-    } catch (err) {
-      deps.log.warn({ err }, "slow-reply notice failed");
-    }
-  }, deps.slowReplyMs ?? SLOW_REPLY_MS);
+  ctx.noticeDue = false;
+  try {
+    const text = t(ctx.lang, "working");
+    await deps.wa.sendText(ctx.msg.from, text);
+    await deps.repo.insertOutbound({ user_id: ctx.user.id, type: "text", language: ctx.lang, payload: { text } });
+  } catch (err) {
+    deps.log.warn({ err }, "slow-reply notice failed");
+  }
 }
 
 async function sendLanguagePicker(ctx: Ctx): Promise<void> {

@@ -151,16 +151,21 @@ export function fakeEngine(routeResult: unknown = { intent: "unknown" }, transcr
   const calls: string[] = [];
   /** What each voice reply said. */
   const spoken: string[] = [];
-  const engine: EngineApi & { routeResult: unknown; heardLang: Lang | null } = {
+  const engine: EngineApi & { routeResult: unknown; heardLang: Lang | null; enText: string | null; routedEnText: (string | undefined)[] } = {
     routeResult,
     /** Set to make the next voice notes sound like another language. */
     heardLang: null,
+    /** Set to make the next voice notes come with an English hearing. */
+    enText: null,
+    /** The English hearing each route() call got. */
+    routedEnText: [],
     async transcribe(_audio, _mime, lang) {
       calls.push("transcribe");
-      return { text: transcript, seconds: 4.2, lang: engine.heardLang ?? lang };
+      return { text: transcript, seconds: 4.2, lang: engine.heardLang ?? lang, ...(engine.enText ? { enText: engine.enText } : {}) };
     },
-    async route() {
+    async route(_text, _lang, _today, enText) {
       calls.push("route");
+      engine.routedEnText.push(enText);
       return engine.routeResult;
     },
     async adapt({ tip }) {

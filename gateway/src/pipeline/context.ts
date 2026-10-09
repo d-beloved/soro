@@ -30,6 +30,10 @@ export interface Ctx {
   now: Date;
   /** Pending "one moment" notice; cleared by the first real reply. */
   slowNotice?: ReturnType<typeof setTimeout>;
+  /** A voice note is being transcribed, so the language to send the notice in isn't known yet. */
+  noticeWaitsForLang?: boolean;
+  /** The notice came due while noticeWaitsForLang: send it once the language is known. */
+  noticeDue?: boolean;
 }
 
 export interface Reply {

@@ -342,10 +342,13 @@ def reconcile_amount(result: dict, text: str) -> dict:
     best = best_amount(cands)
     if best is None:
         return result  # nothing we can read (or a number form we don't parse): trust the model
-    pool = [c.value for c in cands if c.strong] or [c.value for c in cands]
+    every = [c.value for c in cands]
+    pool = [c.value for c in cands if c.strong] or every
     llm = result.get("amount_ngn")
+    if isinstance(llm, (int, float)) and not _accounted(llm, pool, qty) and _accounted(llm, every, qty):
+        pool = every  # a list whose amounts aren't all marked as money: "egg 9k and milk 4500" = 13,500
     if not (isinstance(llm, (int, float)) and llm > 0 and _accounted(llm, pool, qty)):
-        result = {**result, "amount_ngn": best}
+        result = {**result, "amount_ngn": _list_total(result["intent"], llm, pool) or best}
     if result["intent"] in MULTI_CHECK:
         others = other_amounts(result["amount_ngn"], pool, qty)
         if others:
@@ -358,6 +361,15 @@ def reconcile_amount(result: dict, text: str) -> dict:
 # several amounts by nature, and budgets are one figure.
 MULTI_CHECK = {"log_sale", "log_expense", "log_income", "log_debt"}
 _MAX_GROUP = 8  # groups are tried exhaustively; nobody says more amounts than this in one message
+
+
+def _list_total(intent: str, llm: object, values: list[int]) -> int | None:
+    """A list read as one record ("meat 9000, garri 1000, pepper 200"), where the model meant the total but added
+    it up wrong (10000): the real total. None if the model's figure isn't close to it."""
+    total = sum(values)
+    if intent in MULTI_CHECK and len(values) > 1 and isinstance(llm, (int, float)) and abs(llm - total) <= 0.1 * total:
+        return total
+    return None
 
 
 def _group(recorded: float, values: list[int]) -> tuple[int, ...] | None:

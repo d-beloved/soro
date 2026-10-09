@@ -52,7 +52,7 @@ export function findCorrections(messages: LoggedMessage[], recordMessageIds: Set
         if (original) found.push({ kind: "undo", original, fix: m, right: {} });
       } else if (m.intent === "correct_last") {
         const original = live.at(-1);
-        const { intent: _, ...fields } = (m.payload ?? {}) as Record<string, unknown>;
+        const { intent: _, heard_en: __, ...fields } = (m.payload ?? {}) as Record<string, unknown>;
         const right = Object.fromEntries(Object.entries(fields).filter(([, v]) => v != null));
         if (original && Object.keys(right).length) found.push({ kind: "fix", original, fix: m, right });
       }

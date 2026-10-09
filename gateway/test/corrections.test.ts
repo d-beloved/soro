@@ -19,7 +19,7 @@ function msg(id: string, intent: string, payload: unknown = { intent }, user = "
 describe("findCorrections", () => {
   it("links a fixed amount to the record it changed", () => {
     const sale = msg("a", "log_sale", { intent: "log_sale", amount_ngn: 5000 });
-    const fix = msg("b", "correct_last", { intent: "correct_last", amount_ngn: 50000 });
+    const fix = msg("b", "correct_last", { intent: "correct_last", amount_ngn: 50000, heard_en: "no be five k na fifty k" });
     expect(findCorrections([fix, sale], new Set(["a"]))).toEqual([{ kind: "fix", original: sale, fix, right: { amount_ngn: 50000 } }]);
   });
 

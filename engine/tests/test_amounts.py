@@ -120,9 +120,31 @@ def test_other_amounts_rules():
 
 
 def test_few_shot_amounts_agree_with_parser():
+    # the parser reads an amount in every example, and accepts the example's answer as it is (lists: the total)
     for text, out in prompts.FEW_SHOT:
         if out.get("amount_ngn") is not None:
-            assert extract_amount_ngn(text) == out["amount_ngn"], text
+            assert extract_amount_ngn(text) is not None, text
+            assert reconcile_amount(out, text) == out, text
+
+
+def test_reconcile_lists_read_as_one_record():
+    text = "ok, so iosu port food meat, 9000 yelow gari, 1000 lo kozbin 200, pọnmọ, pọnmọ-1-2, yes, basically"
+    r = {"intent": "log_expense", "item": "meat, garri, ponmo", "amount_ngn": 10200}
+    assert reconcile_amount(r, text) == r
+    # the model meant the total but added wrong: the real total, nothing reported as left out
+    assert reconcile_amount({**r, "amount_ngn": 10100}, text) == r
+    # a total of some of them is taken as meant, and the rest reported
+    assert reconcile_amount({**r, "amount_ngn": 10000}, text)["other_amounts"] == [200]
+    # far from the total: the largest amount, and the rest reported
+    out = reconcile_amount({**r, "amount_ngn": 50000}, text)
+    assert out["amount_ngn"] == 9000 and out["other_amounts"] == [1000, 200]
+    # a correction is not a list: "not 5k, 7k" stays on the parsed amount
+    assert reconcile_amount({"intent": "correct_last", "amount_ngn": 12500}, "not 5k, 7k")["amount_ngn"] == 7000
+
+
+def test_reconcile_reads_the_english_hearing():
+    text = prompts.router_input("mo ra oúnjẹ tó kú sí tàtíńtà-ọ̀sán-tún-tún-ọ̀dẹ̀", "more a wunje thirteen thousand two hundred")
+    assert reconcile_amount({"intent": "log_expense", "amount_ngn": 200000}, text)["amount_ngn"] == 13200
 
 
 def test_reconcile_covers_new_intents():

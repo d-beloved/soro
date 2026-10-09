@@ -26,7 +26,9 @@ LLM_REPO = "NCAIR1/N-ATLaS"
 LLM_GGUF = MODELS_DIR / "n-atlas-q4_k_m.gguf"
 # Community quant of the same weights; only used if our own conversion fails and you opt in.
 LLM_COMMUNITY_GGUF = ("QuantFactory/N-ATLaS-GGUF", "N-ATLaS.Q4_K_M.gguf")
-LLM_CTX = 4096
+# The router prompt is ~3.4k tokens of instructions and examples; a long voice note heard twice (see
+# SoroEngine.transcribe) can add 1k more. Each extra 1k tokens of context costs ~128 MB of GPU memory.
+LLM_CTX = 6144
 LLM_TEMPERATURE = 0.1  # model card recommendation
 LLM_REPEAT_PENALTY = 1.12  # model card recommendation
 

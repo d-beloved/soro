@@ -140,7 +140,20 @@ Return ONE JSON object. Fields:
 - correct_to (correct_last only): the right kind of record when the user says the kind was wrong, e.g. "no be sale,
   na expense" = log_expense; one of log_sale, log_expense, log_income, log_debt, debt_paid. Null if the kind was right.
   A correction can fix several things at once: amount_ngn, item, category, counterparty, direction and correct_to.
+Several things of the same kind in one message (all bought, or all sold) are ONE record: item names them all and
+amount_ngn is their total. Leave quantity and unit null then.
+A voice note in Yoruba, Hausa or Igbo can come with a second line starting "English model heard:". It is the same
+voice note transcribed by the English model, because people often say amounts in English inside another language.
+Understand the message from the first line; take the amount from the second line.
 Use null for anything not said. Never invent amounts."""
+
+# Starts the second line of a voice note heard by the English model too (see ROUTER_SYSTEM).
+EN_LINE = "English model heard: "
+
+
+def router_input(text: str, en_text: str | None = None) -> str:
+    return f"{text}\n{EN_LINE}{en_text}" if en_text else text
+
 
 FEW_SHOT: list[tuple[str, dict]] = [
     ("I sell three bags of rice seventy five thousand",
@@ -197,6 +210,10 @@ FEW_SHOT: list[tuple[str, dict]] = [
      {"intent": "correct_last", "correct_to": "log_income", "counterparty": "sister"}),
     ("I need loan of 200k to buy more goods",
      {"intent": "loan_intake", "amount_ngn": 200000, "purpose": "buy more goods"}),
+    ("I buy meat 9000, garri 1000 and pepper 200",
+     {"intent": "log_expense", "item": "meat, garri, pepper", "amount_ngn": 10200, "category": "food"}),
+    ("I sell 2 crates of egg 9k and 3 tin milk 4500",
+     {"intent": "log_sale", "item": "eggs, milk", "amount_ngn": 13500}),
     ("How I go take save money when market slow",
      {"intent": "ask_question", "topic": "savings", "question": "How can I save money when sales are slow?"}),
     # Yoruba (draft)
@@ -207,6 +224,11 @@ FEW_SHOT: list[tuple[str, dict]] = [
     # code-mixed: Yoruba/Hausa/Igbo sentence with English goods and digits
     ("mo ra rice agolo kan 10,000",
      {"intent": "log_expense", "item": "rice", "quantity": 1, "unit": "agolo", "amount_ngn": 10000, "category": "food"}),
+    ("mo ra ẹran 9000, gaàrí 1000, pọ̀nmọ̀ 200",
+     {"intent": "log_expense", "item": "meat, garri, ponmo", "amount_ngn": 10200, "category": "food"}),
+    # amounts said in English inside Yoruba: the Yoruba model turns them into sounds, the English model hears them
+    ("mo ra oúnjẹ tó kú sí tàtíńtà-ọ̀sán-tún-tún-ọ̀dẹ̀\n" + EN_LINE + "more a wunje to cool see thirteen thousand two hundred",
+     {"intent": "log_expense", "item": "food", "amount_ngn": 13200, "category": "food"}),
     ("Pa èyí tí mo sọ kẹ́yìn rẹ́",
      {"intent": "undo_last"}),
     ("Kì í ṣe owó tí mo gbà, owó tí mo ná ni, ẹgbẹ̀rún mẹ́wàá",
@@ -237,6 +259,7 @@ FEW_SHOT: list[tuple[str, dict]] = [
 
 
 def route_messages(text: str, lang: Lang, today: str) -> list[dict]:
+    """`text` as router_input() builds it."""
     messages = [{"role": "system", "content": ROUTER_SYSTEM.format(today=today, lang_name=LANG_NAMES[lang])}]
     for user, out in FEW_SHOT:
         messages.append({"role": "user", "content": user})

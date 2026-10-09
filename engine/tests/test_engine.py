@@ -64,8 +64,8 @@ class FakeEngine:
     def transcribe(self, data, lang, detect=False):
         return {"text": f"heard {len(data)} bytes in {lang}", "lang": "yo" if detect else lang, "seconds": 1.5}
 
-    def route(self, text, lang, today):
-        return {"intent": "log_sale", "amount_ngn": 5000}
+    def route(self, text, lang, today, en_text=None):
+        return {"intent": "log_sale", "amount_ngn": 5000, "item": en_text}
 
     def adapt(self, tip, question, lang):
         return f"[{lang}] {tip}"
@@ -104,6 +104,55 @@ def test_routes(client):
     assert r.json()["text"] == "[ig] Save daily."
     r = client.post("/speak", json={"text": "hello", "lang": "en"}, headers=AUTH)
     assert r.headers["content-type"] == "audio/ogg" and r.content.startswith(b"OggS")
+
+
+def test_route_passes_the_english_hearing(client):
+    body = {"text": "mo ra oúnjẹ tàtíńtà", "lang": "yo", "today": "2026-10-09"}
+    r = client.post("/route", json={**body, "en_text": "thirteen thousand"}, headers=AUTH)
+    assert r.json()["intent"]["item"] == "thirteen thousand"
+    assert client.post("/route", json=body, headers=AUTH).json()["intent"]["item"] is None
+
+
+def test_router_input_adds_the_english_hearing():
+    assert prompts.router_input("mo ra oúnjẹ", None) == "mo ra oúnjẹ"
+    assert prompts.router_input("mo ra oúnjẹ", "thirteen thousand") == "mo ra oúnjẹ\nEnglish model heard: thirteen thousand"
+
+
+class FakeASR:
+    """Yoruba hears the English number words as sounds; English hears them."""
+
+    def __init__(self, yo: str, en: str):
+        self.heard, self.calls = {"yo": yo, "en": en}, []
+
+    def transcribe(self, audio, lang, detect=False):
+        self.calls.append(lang)
+        return self.heard[lang], lang
+
+
+@pytest.mark.parametrize(
+    ("yo", "en", "en_text"),
+    [
+        ("mo ra oúnjẹ tàtíńtà-ọ̀sán", "more a wunje thirteen thousand", "more a wunje thirteen thousand"),
+        ("mo ra oúnjẹ tàtíńtà-ọ̀sán", "more a wunje", None),  # English heard no amount either: nothing to add
+    ],
+)
+def test_second_listen_when_the_amount_is_lost(monkeypatch, yo, en, en_text):
+    from soro_engine import engine as engine_mod
+
+    monkeypatch.setattr(engine_mod, "decode_to_16k", lambda data: __import__("numpy").zeros(16000))
+    eng = engine_mod.SoroEngine(engine_mod.Parts(asr=False, llm=False, tts=False))
+    eng.asr = FakeASR(yo, en)
+    out = eng.transcribe(b"ogg", "yo", detect=True)
+    assert out["text"] == yo and out.get("en_text") == en_text and eng.asr.calls == ["yo", "en"]
+
+
+def test_no_second_listen_when_the_amount_was_heard(monkeypatch):
+    from soro_engine import engine as engine_mod
+
+    monkeypatch.setattr(engine_mod, "decode_to_16k", lambda data: __import__("numpy").zeros(16000))
+    eng = engine_mod.SoroEngine(engine_mod.Parts(asr=False, llm=False, tts=False))
+    eng.asr = FakeASR("mo ra ẹran 9000", "more a ran 9000")
+    assert "en_text" not in eng.transcribe(b"ogg", "yo") and eng.asr.calls == ["yo"]
 
 
 def test_rejects_unknown_language(client):
