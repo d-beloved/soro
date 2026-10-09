@@ -44,6 +44,12 @@ def clean_for_speech(text: str, lang: Lang = "en") -> str:
     return t
 
 
+def naira_sign(text: str) -> str:
+    """The English ASR model writes spoken amounts as dollars ("i barbed my hair for $3000"); in Nigeria they are naira.
+    Left as "$", the router read the note as unknown and the "I heard" echo showed dollars."""
+    return re.sub(r"\$\s?(?=\d)", "₦", text)
+
+
 _PLACEHOLDER = re.compile(r"\{\w+\}")
 
 

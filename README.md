@@ -82,7 +82,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
 
 ## Deploy
 
-1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `0005_rename_views.sql`, then `0006_anonymise_on_delete.sql`, then `supabase/seed/tips.sql`.
+1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `0005_rename_views.sql`, then `0006_anonymise_on_delete.sql`, then `0007_nudge.sql`, then `supabase/seed/tips.sql`.
 2. **Engine on Modal:**
    ```bash
    cd engine
@@ -91,7 +91,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
    uv run --with modal modal run modal_app.py::setup_models
    uv run --with modal modal deploy modal_app.py
    ```
-   The deploy prints the engine URL. Containers scale to zero; a cron in `modal_app.py` keeps one warm during daytime hours (WAT). Use `modal run modal_app.py::warm --on` or `--no-on` to override.
+   The deploy prints the engine URL. Containers scale to zero after 5 idle minutes, so the first message after a quiet spell waits for a cold start (about 45s). `modal run modal_app.py::warm --on` keeps one up until the next deploy, e.g. for a demo; `--no-on` lets it sleep again.
 3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (with `ENGINE_URL` set to the Modal URL, and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
 4. **Meta webhook:** set the callback URL to `https://<your-gateway>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
 5. **Site on Cloudflare Pages:** `npx wrangler pages deploy site --project-name <your-project> --branch main`.

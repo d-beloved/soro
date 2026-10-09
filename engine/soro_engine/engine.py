@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from .amounts import extract_amount_ngn
 from .audio import ASR_SAMPLE_RATE, decode_to_16k, encode_voice_note
 from .config import LLM_GGUF, Lang
+from .text import naira_sign
 
 log = logging.getLogger("soro_engine")
 
@@ -73,9 +74,10 @@ class SoroEngine:
             raise RuntimeError("ASR not loaded")
         audio = decode_to_16k(data)
         text, heard = self.asr.transcribe(audio, lang, detect=detect)
+        text = naira_sign(text)
         out = {"text": text, "lang": heard, "seconds": round(audio.size / ASR_SAMPLE_RATE, 2)}
         if text and heard != "en" and extract_amount_ngn(text) is None:
-            en_text, _ = self.asr.transcribe(audio, "en")
+            en_text = naira_sign(self.asr.transcribe(audio, "en")[0])
             if extract_amount_ngn(en_text) is not None:
                 log.info("asr: amount heard only by the English model: %r", en_text)
                 out["en_text"] = en_text

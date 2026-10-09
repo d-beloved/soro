@@ -30,6 +30,7 @@ export const INTENTS = [
   "ask_question",
   "greeting",
   "help",
+  "set_language",
   "unknown",
 ] as const;
 export type IntentName = (typeof INTENTS)[number];
@@ -82,6 +83,8 @@ export const Intent = z.object({
   purpose: optStr,
   /** correct_last only: the right kind of record, when the user says the kind was wrong. */
   correct_to: z.enum(RECORD_INTENTS).nullish().catch(null).transform((v) => v ?? null),
+  /** set_language only: the language the user asked to be answered in. */
+  language: z.enum(LANGS).nullish().catch(null).transform((v) => v ?? null),
   /** Set by the engine, not the model: amounts in the message that the one record leaves out. */
   other_amounts: z
     .array(z.unknown())

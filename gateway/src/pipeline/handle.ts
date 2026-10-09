@@ -15,6 +15,8 @@ interface Outcome {
   payload?: unknown;
   transcript?: string;
   audio_seconds?: number;
+  /** The language a voice note was heard in, when it differs from the user's chosen one. */
+  language?: Lang;
 }
 
 /** Someone who sends several messages before answering gets the consent prompt once, not once per message. */
@@ -51,7 +53,11 @@ export async function handleMessage(deps: Deps, msg: InboundMessage): Promise<vo
   const outcome: Outcome = {};
   try {
     await dispatch(ctx, outcome).finally(() => clearTimeout(ctx.slowNotice));
-    await deps.repo.updateMessage(messageId, { ...outcome, language: ctx.lang, latency_ms: Date.now() - started });
+    // Anyone set up to record starts their reminder clock again; the reminder checks they still have nothing recorded.
+    if (user.consent_at && (user.language || outcome.intent === "language_set") && outcome.intent !== "deleted") {
+      deps.nudger?.seen(user.id, msg.from, ctx.lang, now);
+    }
+    await deps.repo.updateMessage(messageId, { ...outcome, language: outcome.language ?? ctx.lang, latency_ms: Date.now() - started });
   } catch (err) {
     deps.log.error({ err, messageId }, "message handling failed");
     await deps.repo
@@ -140,6 +146,7 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
     return deliver(ctx, { text: t(ctx.lang, "share_message", { link }), voice: false });
   }
   if (choice === "delete_yes") {
+    out.intent = "deleted";
     await deps.repo.deleteUser(user.id); // also removes this message row
     await deps.wa.sendText(to, t(ctx.lang, "deleted"));
     return;
@@ -156,13 +163,14 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   let input: string;
   let enText: string | undefined;
   if (isAudio) {
-    ctx.noticeWaitsForLang = true;
     const media = await deps.wa.downloadMedia(msg.audio!.id);
     const tr = await deps.engine.transcribe(media.bytes, media.mimeType, ctx.lang);
     if (tr.lang !== ctx.lang) {
-      // Spoken in another of the four languages: understand and answer this note in that one; the saved choice stays.
+      // Heard best by another language's model: the transcript comes from that one, but the reply stays in the
+      // chosen language. Answering in the heard one flip-flopped mid-conversation for people who mix languages,
+      // and answered in Yorùbá someone who chose English and said one Yorùbá name.
       deps.log.info({ messageId: ctx.messageId, chosen: ctx.lang, heard: tr.lang }, "voice note in another language");
-      ctx.lang = tr.lang;
+      out.language = tr.lang;
     }
     out.transcript = tr.text;
     out.audio_seconds = tr.seconds;
@@ -172,8 +180,6 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
     }
     input = tr.text;
     enText = tr.enText;
-    ctx.noticeWaitsForLang = false;
-    if (ctx.noticeDue) await sendSlowNotice(ctx);
   } else if (text) {
     out.transcript = text;
     input = text;
@@ -188,6 +194,14 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
   out.intent = intent.intent;
   // The English hearing is kept for review only; the "I heard" line shows the note's own transcript.
   out.payload = enText ? { ...intent, heard_en: enText } : intent;
+
+  if (intent.intent === "set_language") {
+    // "Speak English to me": switch, and say the welcome in the new language so they see it took.
+    if (!intent.language) return sendLanguagePicker(ctx);
+    await deps.repo.setLanguage(user.id, intent.language);
+    ctx.lang = intent.language;
+    return deliver(ctx, { text: t(ctx.lang, "welcome"), voice: false });
+  }
 
   let reply = await applyCommerce(ctx, intent);
   if (reply && intent.amount_ngn != null && intent.other_amounts.length > 0) reply = withOtherAmounts(ctx, reply, intent.other_amounts);
@@ -216,20 +230,15 @@ function withOtherAmounts(ctx: Ctx, reply: Reply, amounts: number[]): Reply {
   return { ...reply, text: `${reply.text}\n\n${note}`, spoken: `${reply.spoken ?? firstLine(reply.text)} ${note}` };
 }
 
-/**
- * The engine can be slow (long voice note, busy or cold GPU): after a while, tell the user we got it. During a
- * voice note's transcription the notice waits, so it goes out in the language the note turns out to be in.
- */
+/** The engine can be slow (long voice note, busy or cold GPU): after a while, tell the user we got it. */
 function startSlowNotice(ctx: Ctx): void {
   ctx.slowNotice = setTimeout(() => {
-    if (ctx.noticeWaitsForLang) ctx.noticeDue = true;
-    else void sendSlowNotice(ctx);
+    ctx.noticeSending = sendSlowNotice(ctx);
   }, ctx.deps.slowReplyMs ?? SLOW_REPLY_MS);
 }
 
 async function sendSlowNotice(ctx: Ctx): Promise<void> {
   const { deps } = ctx;
-  ctx.noticeDue = false;
   try {
     const text = t(ctx.lang, "working");
     await deps.wa.sendText(ctx.msg.from, text);
@@ -255,6 +264,8 @@ function firstLine(text: string): string {
 async function deliver(ctx: Ctx, reply: Reply): Promise<void> {
   const { deps } = ctx;
   clearTimeout(ctx.slowNotice);
+  // A notice already on its way must land first: sent side by side, the reply sometimes arrived before it.
+  await ctx.noticeSending;
   await deps.wa.sendText(ctx.msg.from, reply.text);
   await deps.repo.insertOutbound({ user_id: ctx.user.id, type: "text", language: ctx.lang, payload: { text: reply.text } });
 

@@ -121,7 +121,7 @@ def test_other_amounts_rules():
 
 def test_few_shot_amounts_agree_with_parser():
     # the parser reads an amount in every example, and accepts the example's answer as it is (lists: the total)
-    for text, out in prompts.FEW_SHOT:
+    for _, text, out in prompts.FEW_SHOT:
         if out.get("amount_ngn") is not None:
             assert extract_amount_ngn(text) is not None, text
             assert reconcile_amount(out, text) == out, text

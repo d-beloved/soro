@@ -107,6 +107,8 @@ export interface Repo {
   pickTip(userId: string, topic: TipTopic | null): Promise<TipRow | null>;
   lastTipAt(userId: string): Promise<Date | null>;
   insertTipDelivery(row: { user_id: string; tip_id: string; message_id: string; trigger: "asked" | "auto"; audio_sent: boolean }): Promise<void>;
+  /** Marks the user reminded, if they have never recorded anything and were not reminded before; false otherwise. */
+  claimNudge(userId: string): Promise<boolean>;
 }
 
 const UNIQUE_VIOLATION = "23505";
@@ -271,6 +273,17 @@ export function createRepo(url: string, serviceRoleKey: string): Repo {
 
     async insertTipDelivery(row) {
       check(await db.from("tip_deliveries").insert(row));
+    },
+
+    async claimNudge(userId) {
+      // Undone records count: whoever recorded and undid one already knows how.
+      const res = await db.from("transactions").select("id", { count: "exact", head: true }).eq("user_id", userId);
+      check(res);
+      if ((res.count ?? 0) > 0) return false;
+      const rows = check(
+        await db.from("users").update({ nudged_at: new Date().toISOString() }).eq("id", userId).is("nudged_at", null).select("id"),
+      ) as { id: string }[] | null;
+      return (rows ?? []).length > 0;
     },
   };
 }

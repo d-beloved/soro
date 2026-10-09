@@ -4,18 +4,23 @@ import { loadConfig } from "./config.js";
 import { createRepo } from "./db/repo.js";
 import { createEngineClient } from "./engine/client.js";
 import { logger } from "./lib/logger.js";
+import { Nudger } from "./pipeline/nudge.js";
 import { createWhatsAppClient } from "./whatsapp/client.js";
 
 const cfg = loadConfig();
+
+const wa = createWhatsAppClient({ accessToken: cfg.WA_ACCESS_TOKEN, phoneNumberId: cfg.WA_PHONE_NUMBER_ID, graphVersion: cfg.WA_GRAPH_VERSION });
+const repo = createRepo(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY);
 
 const app = createApp({
   verifyToken: cfg.WA_VERIFY_TOKEN,
   appSecret: cfg.WA_APP_SECRET,
   deps: {
-    wa: createWhatsAppClient({ accessToken: cfg.WA_ACCESS_TOKEN, phoneNumberId: cfg.WA_PHONE_NUMBER_ID, graphVersion: cfg.WA_GRAPH_VERSION }),
+    wa,
     engine: createEngineClient({ baseUrl: cfg.ENGINE_URL, token: cfg.ENGINE_TOKEN }),
-    repo: createRepo(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY),
+    repo,
     log: logger,
+    nudger: new Nudger({ repo, wa, log: logger }),
     phoneSalt: cfg.PHONE_HASH_SALT,
     privacyUrl: cfg.PRIVACY_URL,
     publicNumber: cfg.WA_PUBLIC_NUMBER,

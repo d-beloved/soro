@@ -24,6 +24,7 @@ export function fakeRepo() {
     loans: [] as any[],
     tipDeliveries: [] as any[],
     budgets: new Map<string, number>(),
+    nudged: new Set<string>(),
   };
   let n = 0;
   const repo: Repo = {
@@ -115,6 +116,11 @@ export function fakeRepo() {
     },
     async insertTipDelivery(row) {
       state.tipDeliveries.push(row);
+    },
+    async claimNudge(userId) {
+      if (!users.has(userId) || state.nudged.has(userId) || state.txns.some((t) => t.user_id === userId)) return false;
+      state.nudged.add(userId);
+      return true;
     },
   };
   return { repo, state };

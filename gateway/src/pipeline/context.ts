@@ -4,6 +4,7 @@ import type { Lang, TipTopic } from "../domain/intents.js";
 import type { Logger } from "../lib/logger.js";
 import type { WhatsAppApi } from "../whatsapp/client.js";
 import type { InboundMessage } from "../whatsapp/types.js";
+import type { Nudger } from "./nudge.js";
 
 export interface Deps {
   wa: WhatsAppApi;
@@ -17,6 +18,8 @@ export interface Deps {
   voiceReplies: boolean;
   /** How long engine work may take before the user gets a "one moment" notice; defaults to 10s. */
   slowReplyMs?: number;
+  /** Reminds people who onboard but never record anything. */
+  nudger?: Pick<Nudger, "seen">;
   now?: () => Date;
 }
 
@@ -30,10 +33,8 @@ export interface Ctx {
   now: Date;
   /** Pending "one moment" notice; cleared by the first real reply. */
   slowNotice?: ReturnType<typeof setTimeout>;
-  /** A voice note is being transcribed, so the language to send the notice in isn't known yet. */
-  noticeWaitsForLang?: boolean;
-  /** The notice came due while noticeWaitsForLang: send it once the language is known. */
-  noticeDue?: boolean;
+  /** The notice, once the timer has started sending it; the reply waits for it so the two arrive in order. */
+  noticeSending?: Promise<void>;
 }
 
 export interface Reply {

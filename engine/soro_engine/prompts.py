@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import json
 
-from .config import LANG_NAMES, Lang
+from .config import LANG_NAMES, LANGS, Lang
 
 INTENTS = [
     "log_sale", "log_expense", "log_income", "log_debt", "debt_paid", "stock_update", "summary_query",
-    "set_budget", "undo_last", "correct_last", "loan_intake", "ask_question", "greeting", "help", "unknown",
+    "set_budget", "undo_last", "correct_last", "loan_intake", "ask_question", "greeting", "help", "set_language",
+    "unknown",
 ]
 TOPICS = ["separate_money", "record_keeping", "cash_flow", "debt_recovery", "credit_readiness", "savings", "pricing"]
 # "goods" and "business_costs" are business spending; the rest are personal.
@@ -43,6 +44,7 @@ ROUTER_SCHEMA = {
         "question": _str,
         "purpose": _str,
         "correct_to": {"enum": [*RECORD_INTENTS, None]},
+        "language": {"enum": [*LANGS, None]},
     },
     "required": ["intent"],
 }
@@ -80,10 +82,19 @@ def category_messages(text: str) -> list[dict]:
     return messages + [{"role": "user", "content": text}]
 
 
+# What the model writes when it has no item; shown to the user as "Spent: unknown — ₦20,000".
+NO_ITEM = {"unknown", "none", "null", "n/a", "nothing", "item", "money"}
+
+
 def tidy_route(result: dict) -> dict:
     """Keep "category" only on intents that use it (and corrections), and only if it is a known one;
-    keep "correct_to" only on corrections."""
+    keep "correct_to" only on corrections and "language" only on set_language; drop placeholder items."""
     intent = result.get("intent")
+    item = result.get("item")
+    if isinstance(item, str) and item.strip().lower() in NO_ITEM:
+        result = {**result, "item": None}
+    if result.get("language") is not None and (intent != "set_language" or result["language"] not in LANGS):
+        result = {**result, "language": None}
     if result.get("category") is not None and (
         (intent not in CATEGORY_INTENTS and intent != "correct_last") or result["category"] not in CATEGORIES
     ):
@@ -105,24 +116,31 @@ def needs_category(result: dict) -> bool:
 
 ROUTER_SYSTEM = """You are the message router for Sọ̀rọ̀, a WhatsApp money-records and money-tips assistant for people in Nigeria:
 market traders, artisans and other small businesses, and also workers and students tracking their personal money.
-Today is {today}. The user speaks {lang_name}; the message may also mix English, Pidgin, Yoruba, Hausa or Igbo.
-Messages are often voice-note transcripts, so expect missing punctuation and spelling mistakes.
+Today is {today}. Each message starts with the language the user chose, in brackets, e.g. [Yoruba]. The message
+itself may mix English, Pidgin, Yoruba, Hausa or Igbo. Messages are often voice-note transcripts, so expect missing
+punctuation, spelling mistakes, and words run together or heard as English ("mowatunra" is "mo wá tún ra").
 
 Return ONE JSON object. Fields:
 - intent:
   log_sale (user sold goods or was paid for their work or service),
   log_expense (user spent money: goods to resell, business costs, or personal spending like food, data, transport),
-  log_income (personal money received that is not a sale: salary, allowance, money someone sent, gift),
+  log_income (personal money received that is not a sale: salary, allowance, money someone sent, gift; only when
+    money came TO the user. Buying is never income: "I buy", "mo ra", "na sayi", "azụrụ m" are log_expense),
   log_debt (someone owes the user, or the user owes someone; also money lent or borrowed),
   debt_paid (a debt was paid back, either to the user or by the user),
   stock_update (how many goods are left in the shop, a count),
   summary_query (asks how much they sold/spent/earned, profit, who owes them, where their money went),
   set_budget (sets a spending limit for a category, per month),
   undo_last (cancel or remove the last thing recorded),
-  correct_last (the user says the last record was wrong; fill only what they fixed, see correct_to),
+  correct_last (the user says the last record was wrong; fill only what they fixed, see correct_to. A message that
+    starts "no", "I said", "rárá", "mo ní", "kì í ṣe", "ba ... ba ne" or "ọ bụghị" and says the record again
+    differently is correct_last, not a new record),
   loan_intake (wants a loan or credit),
-  ask_question (any question about money, saving, budgeting, pricing, debt, records, loans), greeting, help, unknown.
-- item, quantity, unit: the goods or thing, e.g. item "rice", quantity 3, unit "bags".
+  ask_question (any question about money, saving, budgeting, pricing, debt, records, loans; but "how much is left",
+    "how much I don spend" is summary_query),
+  set_language (the user asks to be answered in another language, see language), greeting, help, unknown.
+- item, quantity, unit: the goods or thing, e.g. item "rice", quantity 3, unit "bags". Use the user's own words for
+  the item, in English; null if unclear. Never write "unknown", and never invent who sent money.
 - amount_ngn: total amount in naira as a plain number. Copy digits exactly: "10,000" = 10000, "5k" = 5000, "2.5m" = 2500000.
   Words: "five thousand" = 5000; Yoruba ẹgbẹ̀rún, Hausa dubu, Igbo puku = thousand, and the count comes after it
   ("ẹgbẹ̀rún márùn-ún" = 5000, "dubu biyar" = 5000, "puku iri ise" = 50000).
@@ -140,6 +158,7 @@ Return ONE JSON object. Fields:
 - correct_to (correct_last only): the right kind of record when the user says the kind was wrong, e.g. "no be sale,
   na expense" = log_expense; one of log_sale, log_expense, log_income, log_debt, debt_paid. Null if the kind was right.
   A correction can fix several things at once: amount_ngn, item, category, counterparty, direction and correct_to.
+- language (set_language only): en (English or Pidgin), yo, ha or ig; null if they did not say which.
 Several things of the same kind in one message (all bought, or all sold) are ONE record: item names them all and
 amount_ngn is their total. Leave quantity and unit null then.
 A voice note in Yoruba, Hausa or Igbo can come with a second line starting "English model heard:". It is the same
@@ -155,116 +174,147 @@ def router_input(text: str, en_text: str | None = None) -> str:
     return f"{text}\n{EN_LINE}{en_text}" if en_text else text
 
 
-FEW_SHOT: list[tuple[str, dict]] = [
-    ("I sell three bags of rice seventy five thousand",
+FEW_SHOT: list[tuple[Lang, str, dict]] = [
+    ("en", "I sell three bags of rice seventy five thousand",
      {"intent": "log_sale", "item": "rice", "quantity": 3, "unit": "bags", "amount_ngn": 75000}),
-    ("I don buy fuel for generator 4500",
+    ("en", "I don buy fuel for generator 4500",
      {"intent": "log_expense", "item": "generator fuel", "amount_ngn": 4500, "category": "business_costs"}),
-    ("I buy two carton of Indomie for shop 18k",
+    ("en", "I buy two carton of Indomie for shop 18k",
      {"intent": "log_expense", "item": "Indomie", "quantity": 2, "unit": "cartons", "amount_ngn": 18000, "category": "goods"}),
-    ("I collect 8k for sewing Mama Tunde gown",
+    ("en", "I collect 8k for sewing Mama Tunde gown",
      {"intent": "log_sale", "item": "sewing", "amount_ngn": 8000, "counterparty": "Mama Tunde"}),
-    ("I buy data 1500",
+    ("en", "I buy data 1500",
      {"intent": "log_expense", "item": "data", "amount_ngn": 1500, "category": "data_airtime"}),
-    ("I chop rice and chicken 2,500 this afternoon",
+    ("en", "I chop rice and chicken 2,500 this afternoon",
      {"intent": "log_expense", "item": "rice and chicken", "amount_ngn": 2500, "category": "food"}),
-    ("I send my mama 10k",
+    ("en", "I send my mama 10k",
      {"intent": "log_expense", "item": "money for mama", "amount_ngn": 10000, "category": "family"}),
-    ("I put 20k for my ajo",
+    ("en", "I put 20k for my ajo",
      {"intent": "log_expense", "item": "ajo", "amount_ngn": 20000, "category": "savings"}),
-    ("my salary don enter, 150k",
+    ("en", "my salary don enter, 150k",
      {"intent": "log_income", "item": "salary", "amount_ngn": 150000}),
-    ("My papa send me 20k for upkeep",
+    ("en", "My papa send me 20k for upkeep",
      {"intent": "log_income", "item": "upkeep", "amount_ngn": 20000, "counterparty": "Papa"}),
-    ("my food budget for this month na 40k",
+    ("en", "my food budget for this month na 40k",
      {"intent": "set_budget", "category": "food", "amount_ngn": 40000}),
-    ("Mama Chidi owe me five thousand naira",
+    ("en", "Mama Chidi owe me five thousand naira",
      {"intent": "log_debt", "counterparty": "Mama Chidi", "amount_ngn": 5000, "direction": "owed_to_me"}),
-    ("I still owe Alhaji 20k for the goods wey I collect",
+    ("en", "I still owe Alhaji 20k for the goods wey I collect",
      {"intent": "log_debt", "counterparty": "Alhaji", "amount_ngn": 20000, "direction": "i_owe"}),
-    ("I get ten carton of Indomie remain",
+    ("en", "I get ten carton of Indomie remain",
      {"intent": "stock_update", "item": "Indomie", "quantity": 10, "unit": "cartons"}),
-    ("Iya Bisi still owe me 3k for pepper",
+    ("en", "Iya Bisi still owe me 3k for pepper",
      {"intent": "log_debt", "counterparty": "Iya Bisi", "amount_ngn": 3000, "direction": "owed_to_me"}),
-    ("Emeka don pay me the 4k wey he owe",
+    ("en", "Emeka don pay me the 4k wey he owe",
      {"intent": "debt_paid", "counterparty": "Emeka", "amount_ngn": 4000, "direction": "owed_to_me"}),
-    ("I don pay Alhaji 10k out of the money I owe am",
+    ("en", "I don pay Alhaji 10k out of the money I owe am",
      {"intent": "debt_paid", "counterparty": "Alhaji", "amount_ngn": 10000, "direction": "i_owe"}),
-    ("I lend my guy Tunde 5k",
+    ("en", "I lend my guy Tunde 5k",
      {"intent": "log_debt", "counterparty": "Tunde", "amount_ngn": 5000, "direction": "owed_to_me"}),
-    ("How much I don sell this week",
+    ("en", "How much I don sell this week",
      {"intent": "summary_query", "period": "week"}),
-    ("where my money dey go this month",
+    ("en", "where my money dey go this month",
      {"intent": "summary_query", "period": "month"}),
-    ("cancel that last one, e no correct",
+    ("en", "cancel that last one, e no correct",
      {"intent": "undo_last"}),
-    ("no be 5k, na 50k",
+    ("en", "no be 5k, na 50k",
      {"intent": "correct_last", "amount_ngn": 50000}),
-    ("no, that one no be income. Na tithe I pay, 135,100",
+    ("en", "no, that one no be income. Na tithe I pay, 135,100",
      {"intent": "correct_last", "correct_to": "log_expense", "item": "tithe", "amount_ngn": 135100}),
-    ("e no be food, na transport",
+    ("en", "e no be food, na transport",
      {"intent": "correct_last", "category": "transport"}),
-    ("na Emeka, no be Chidi. And e be 7k",
+    ("en", "na Emeka, no be Chidi. And e be 7k",
      {"intent": "correct_last", "counterparty": "Emeka", "amount_ngn": 7000}),
-    ("I no sell am, na money I collect from my sister",
+    ("en", "I no sell am, na money I collect from my sister",
      {"intent": "correct_last", "correct_to": "log_income", "counterparty": "sister"}),
-    ("I need loan of 200k to buy more goods",
+    ("en", "I need loan of 200k to buy more goods",
      {"intent": "loan_intake", "amount_ngn": 200000, "purpose": "buy more goods"}),
-    ("I buy meat 9000, garri 1000 and pepper 200",
+    ("en", "I buy meat 9000, garri 1000 and pepper 200",
      {"intent": "log_expense", "item": "meat, garri, pepper", "amount_ngn": 10200, "category": "food"}),
-    ("I sell 2 crates of egg 9k and 3 tin milk 4500",
+    ("en", "I sell 2 crates of egg 9k and 3 tin milk 4500",
      {"intent": "log_sale", "item": "eggs, milk", "amount_ngn": 13500}),
-    ("How I go take save money when market slow",
+    ("en", "How I go take save money when market slow",
      {"intent": "ask_question", "topic": "savings", "question": "How can I save money when sales are slow?"}),
+    ("en", "how much I get left now",
+     {"intent": "summary_query", "period": "month"}),
+    ("en", "I buy underwear for me and my children 12,200",
+     {"intent": "log_expense", "item": "underwear", "amount_ngn": 12200, "category": "clothing"}),
+    ("en", "No, I said I paid for the cake, 15,000",
+     {"intent": "correct_last", "correct_to": "log_expense", "item": "cake", "amount_ngn": 15000}),
+    ("en", "please speak to me in English",
+     {"intent": "set_language", "language": "en"}),
+    ("en", "abeg change the language",
+     {"intent": "set_language"}),
     # Yoruba (draft)
-    ("Mo ta àpò ìrẹsì méjì ní 50,000 naira",
+    ("yo", "Mo ta àpò ìrẹsì méjì ní 50,000 naira",
      {"intent": "log_sale", "item": "rice", "quantity": 2, "unit": "bags", "amount_ngn": 50000}),
-    ("Mo ta ata ní ẹgbẹ̀rún márùn-ún naira",
+    ("yo", "Mo ta ata ní ẹgbẹ̀rún márùn-ún naira",
      {"intent": "log_sale", "item": "pepper", "amount_ngn": 5000}),
     # code-mixed: Yoruba/Hausa/Igbo sentence with English goods and digits
-    ("mo ra rice agolo kan 10,000",
+    ("yo", "mo ra rice agolo kan 10,000",
      {"intent": "log_expense", "item": "rice", "quantity": 1, "unit": "agolo", "amount_ngn": 10000, "category": "food"}),
-    ("mo ra ẹran 9000, gaàrí 1000, pọ̀nmọ̀ 200",
+    ("yo", "mo ra ẹran 9000, gaàrí 1000, pọ̀nmọ̀ 200",
      {"intent": "log_expense", "item": "meat, garri, ponmo", "amount_ngn": 10200, "category": "food"}),
     # amounts said in English inside Yoruba: the Yoruba model turns them into sounds, the English model hears them
-    ("mo ra oúnjẹ tó kú sí tàtíńtà-ọ̀sán-tún-tún-ọ̀dẹ̀\n" + EN_LINE + "more a wunje to cool see thirteen thousand two hundred",
+    ("yo", "mo ra oúnjẹ tó kú sí tàtíńtà-ọ̀sán-tún-tún-ọ̀dẹ̀\n" + EN_LINE + "more a wunje to cool see thirteen thousand two hundred",
      {"intent": "log_expense", "item": "food", "amount_ngn": 13200, "category": "food"}),
-    ("Pa èyí tí mo sọ kẹ́yìn rẹ́",
+    ("yo", "Pa èyí tí mo sọ kẹ́yìn rẹ́",
      {"intent": "undo_last"}),
-    ("Kì í ṣe owó tí mo gbà, owó tí mo ná ni, ẹgbẹ̀rún mẹ́wàá",
+    ("yo", "Kì í ṣe owó tí mo gbà, owó tí mo ná ni, ẹgbẹ̀rún mẹ́wàá",
      {"intent": "correct_last", "correct_to": "log_expense", "amount_ngn": 10000}),
-    ("Báwo ni mo ṣe lè fi owó pamọ́",
+    ("yo", "Báwo ni mo ṣe lè fi owó pamọ́",
      {"intent": "ask_question", "topic": "savings", "question": "How can I save money?"}),
+    ("yo", "mo ra kéèkì 5,000",
+     {"intent": "log_expense", "item": "cake", "amount_ngn": 5000, "category": "food"}),
+    # a Yoruba note the English model heard best: "mo wá tún ra" (I also bought) run together
+    ("yo", "mowatunra puff puff, 1,500.",
+     {"intent": "log_expense", "item": "puff puff", "amount_ngn": 1500, "category": "food"}),
+    ("yo", "rárá o, mo ní mo ra búrẹ́dì 2,000",
+     {"intent": "correct_last", "correct_to": "log_expense", "item": "bread", "amount_ngn": 2000}),
+    ("yo", "Èló ló kù lọ́wọ́ mi ní oṣù yìí",
+     {"intent": "summary_query", "period": "month"}),
+    ("yo", "Ẹ máa bá mi sọ̀rọ̀ ní Yorùbá",
+     {"intent": "set_language", "language": "yo"}),
     # Hausa (draft)
-    ("Na sayar da buhun shinkafa uku naira dubu saba'in da biyar",
+    ("ha", "Na sayar da buhun shinkafa uku naira dubu saba'in da biyar",
      {"intent": "log_sale", "item": "rice", "quantity": 3, "unit": "bags", "amount_ngn": 75000}),
-    ("Ina bin Musa bashin naira dubu biyar",
+    ("ha", "Ina bin Musa bashin naira dubu biyar",
      {"intent": "log_debt", "counterparty": "Musa", "amount_ngn": 5000, "direction": "owed_to_me"}),
-    ("Musa ya biya ni dubu biyar",
+    ("ha", "Musa ya biya ni dubu biyar",
      {"intent": "debt_paid", "counterparty": "Musa", "amount_ngn": 5000, "direction": "owed_to_me"}),
-    ("Ba dubu biyar ba ne, dubu hamsin ne",
+    ("ha", "Ba dubu biyar ba ne, dubu hamsin ne",
      {"intent": "correct_last", "amount_ngn": 50000}),
-    ("Na sayar da rice bags biyu 50k",
+    ("ha", "Na sayar da rice bags biyu 50k",
      {"intent": "log_sale", "item": "rice", "quantity": 2, "unit": "bags", "amount_ngn": 50000}),
     # Igbo (draft)
-    ("Erere m akpa osikapa abụọ, puku naira iri ise",
+    ("ig", "Erere m akpa osikapa abụọ, puku naira iri ise",
      {"intent": "log_sale", "item": "rice", "quantity": 2, "unit": "bags", "amount_ngn": 50000}),
-    ("Azụrụ m tomatoes basket otu maka ahịa m 15,000",
+    ("ig", "Azụrụ m tomatoes basket otu maka ahịa m 15,000",
      {"intent": "log_expense", "item": "tomatoes", "quantity": 1, "unit": "basket", "amount_ngn": 15000, "category": "goods"}),
-    ("Kedụ ka m ga-esi chekwaa ego",
+    ("ig", "Kedụ ka m ga-esi chekwaa ego",
      {"intent": "ask_question", "topic": "savings", "question": "How can I save money?"}),
-    ("Good morning o",
+    ("en", "Good morning o",
      {"intent": "greeting"}),
 ]
 
 
+# The language goes in each message, not the system prompt: llama.cpp reuses the cached prompt only up to the first
+# token that differs, so a language in the system prompt made every switch of language re-read all ~4k tokens of
+# examples (route took 6-7 s instead of 1.5-2.5 s on the pilot's mixed-language traffic).
+LANG_TAGS: dict[Lang, str] = {"en": "English", "yo": "Yoruba", "ha": "Hausa", "ig": "Igbo"}
+
+
+def tagged(text: str, lang: Lang) -> str:
+    return f"[{LANG_TAGS[lang]}] {text}"
+
+
 def route_messages(text: str, lang: Lang, today: str) -> list[dict]:
-    """`text` as router_input() builds it."""
-    messages = [{"role": "system", "content": ROUTER_SYSTEM.format(today=today, lang_name=LANG_NAMES[lang])}]
-    for user, out in FEW_SHOT:
-        messages.append({"role": "user", "content": user})
+    """`text` as router_input() builds it; `lang` is the user's chosen language."""
+    messages = [{"role": "system", "content": ROUTER_SYSTEM.format(today=today)}]
+    for ex_lang, user, out in FEW_SHOT:
+        messages.append({"role": "user", "content": tagged(user, ex_lang)})
         messages.append({"role": "assistant", "content": json.dumps(out, ensure_ascii=False)})
-    messages.append({"role": "user", "content": text})
+    messages.append({"role": "user", "content": tagged(text, lang)})
     return messages
 
 

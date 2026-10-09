@@ -41,11 +41,13 @@ def test_clean_for_speech_says_amounts_in_the_reply_language(lang, spoken):
 
 def test_router_prompt_and_schema():
     msgs = prompts.route_messages("I sell rice 5k", "yo", "2026-10-07")
-    assert msgs[0]["role"] == "system" and "2026-10-07" in msgs[0]["content"] and "Yoruba" in msgs[0]["content"]
-    assert msgs[-1] == {"role": "user", "content": "I sell rice 5k"}
+    assert msgs[0]["role"] == "system" and "2026-10-07" in msgs[0]["content"]
+    assert msgs[-1] == {"role": "user", "content": "[Yoruba] I sell rice 5k"}
+    # everything before the message is the same for every language, so llama.cpp's prompt cache survives a switch
+    assert prompts.route_messages("x", "en", "2026-10-07")[:-1] == msgs[:-1]
     # every few-shot answer must satisfy the schema's enums
     props = prompts.ROUTER_SCHEMA["properties"]
-    for _, out in prompts.FEW_SHOT:
+    for _, _, out in prompts.FEW_SHOT:
         assert out["intent"] in props["intent"]["enum"]
         for k, v in out.items():
             assert k in props
@@ -192,6 +194,15 @@ def test_corrections_keep_their_fields():
     assert not needs_category({"intent": "correct_last", "amount_ngn": 5000})
 
 
+def test_tidy_route_drops_placeholder_items_and_stray_languages():
+    from soro_engine.prompts import tidy_route
+
+    assert tidy_route({"intent": "log_expense", "item": "unknown"})["item"] is None
+    assert tidy_route({"intent": "log_expense", "item": "cake"})["item"] == "cake"
+    assert tidy_route({"intent": "set_language", "language": "ha"})["language"] == "ha"
+    assert tidy_route({"intent": "greeting", "language": "ha"})["language"] is None
+
+
 def test_language_pick_needs_a_clear_win():
     from soro_engine.asr import SWITCH_MARGIN, Guess, pick, score_tokens
 
@@ -202,3 +213,11 @@ def test_language_pick_needs_a_clear_win():
     assert score_tokens([-0.1, -0.2], "") == float("-inf")
     assert score_tokens([-0.1] * 50, "ra " * 40) == float("-inf")  # looping
     assert score_tokens([-0.1, -0.3], "mo ra data") == -0.2
+
+
+def test_naira_sign():
+    from soro_engine.text import naira_sign
+
+    assert naira_sign("i just barbed my hair for $3000.") == "i just barbed my hair for ₦3000."
+    assert naira_sign("they amounted to $ 12,200") == "they amounted to ₦12,200"
+    assert naira_sign("no amount $ here") == "no amount $ here"

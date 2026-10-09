@@ -220,15 +220,30 @@ describe("fixing mistakes", () => {
 });
 
 describe("spoken language", () => {
-  it("understands and answers a voice note in the language it was spoken in, without changing the saved one", async () => {
+  it("answers a voice note heard in another language in the chosen one, and logs the heard one", async () => {
     const t = await onboarded("lang_en");
     t.engine.heardLang = "yo";
     t.engine.routeResult = { intent: "log_sale", item: "rice", amount_ngn: 75000 };
     await handleMessage(t.deps, voice());
-    expect(t.sent[0]!.body).toContain("Ohun tí mo gbọ́");
+    expect(t.sent[0]!.body).toContain("I heard");
     const user = [...t.state.users.values()][0]!;
     expect(user.language).toBe("en");
-    expect(t.state.messages.at(-1)).toMatchObject({ language: "yo" });
+    expect(t.state.messages.at(-1)).toMatchObject({ type: "audio", language: "yo" });
+  });
+
+  it("switches language when asked to, and welcomes them in it", async () => {
+    const t = await onboarded("lang_yo");
+    t.engine.routeResult = { intent: "set_language", language: "en" };
+    await handleMessage(t.deps, voice());
+    expect([...t.state.users.values()][0]!.language).toBe("en");
+    expect(t.sent.at(-1)!.body).toContain("You're set!");
+  });
+
+  it("shows the language list when asked to switch without saying to which", async () => {
+    const t = await onboarded("lang_en");
+    t.engine.routeResult = { intent: "set_language" };
+    await handleMessage(t.deps, text("change my language"));
+    expect(t.sent.at(-1)).toMatchObject({ kind: "list" });
   });
 
   it("gives the router the English hearing of a note, but shows the note's own transcript", async () => {
@@ -431,7 +446,7 @@ describe("slow replies", () => {
     expect(t.sent.map((s) => s.body)).toEqual(["⏳ Got it, one moment…", expect.stringContaining("Hello!")]);
   });
 
-  it("waits for a voice note's language, and says it in that one", async () => {
+  it("says it in the chosen language, even when the note is heard in another", async () => {
     const t = await onboarded("lang_yo");
     t.deps.slowReplyMs = 5;
     t.engine.heardLang = "en";
@@ -440,9 +455,24 @@ describe("slow replies", () => {
     t.engine.transcribe = async (...args) => (await wait(40), transcribe(...args));
     await handleMessage(t.deps, voice());
     expect(t.sent.filter((s) => s.kind === "text").map((s) => s.body)).toEqual([
-      "⏳ Got it, one moment…",
-      expect.stringContaining("Hello!"),
+      "⏳ Mo ti gbọ́, dúró díẹ̀…",
+      expect.stringContaining("Ohun tí mo gbọ́"),
     ]);
+  });
+
+  it("never lets the reply overtake a notice still being sent", async () => {
+    const t = await onboarded();
+    t.deps.slowReplyMs = 5;
+    t.engine.routeResult = { intent: "greeting" };
+    const route = t.engine.route;
+    t.engine.route = async (...args) => (await wait(20), route(...args));
+    const sendText = t.deps.wa.sendText;
+    t.deps.wa.sendText = async (to, body) => {
+      if (body.startsWith("⏳")) await wait(60); // the notice is slow to send; the reply is ready meanwhile
+      return sendText(to, body);
+    };
+    await handleMessage(t.deps, text("hello"));
+    expect(t.sent.map((s) => s.body)).toEqual(["⏳ Got it, one moment…", expect.stringContaining("Hello!")]);
   });
 
   it("sends no notice when the reply comes quickly", async () => {

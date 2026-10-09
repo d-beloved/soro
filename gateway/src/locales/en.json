@@ -83,5 +83,6 @@
   "delete_cancelled": "Okay, nothing was deleted.",
   "working": "⏳ Got it, one moment…",
   "error": "Sorry, something went wrong on our side. Please try again in a minute.",
-  "a_loan": "a loan"
+  "a_loan": "a loan",
+  "nudge": "👋 Your record still empty. Tell me one thing you spend money on today, by voice note or text, like \"I buy bread 1,500\" or \"Transport 2k\". I go write am down for you."
 }
