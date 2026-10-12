@@ -217,6 +217,9 @@ export function tap(id: string): InboundMessage {
 export function pick(id: string): InboundMessage {
   return { from: PHONE, id: `wamid.in${++seq}`, timestamp: "1791100000", type: "interactive", interactive: { type: "list_reply", list_reply: { id, title: id } } };
 }
+export function reaction(messageId: string, emoji = "👍"): InboundMessage {
+  return { from: PHONE, id: `wamid.in${++seq}`, timestamp: "1791100000", type: "reaction", reaction: { message_id: messageId, emoji } } as InboundMessage;
+}
 export function voice(): InboundMessage {
   return { from: PHONE, id: `wamid.in${++seq}`, timestamp: "1791100000", type: "audio", audio: { id: "media123", mime_type: "audio/ogg; codecs=opus", voice: true } };
 }

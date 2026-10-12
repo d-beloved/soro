@@ -19,7 +19,11 @@ interface Outcome {
   language?: Lang;
 }
 
-/** Someone who sends several messages before answering gets the consent prompt once, not once per message. */
+/**
+ * Before consent, a burst of messages gets one prompt. A text or voice note sent after the burst gets it again, in case the
+ * chat was cleared; stickers, photos and the like wait the full 10 minutes.
+ */
+const CONSENT_BURST_MS = 60_000;
 const CONSENT_REPROMPT_MS = 10 * 60_000;
 
 /** A warm engine answers a Yoruba voice note in ~5-8s; past this, say we're on it instead of leaving blue ticks. */
@@ -37,6 +41,8 @@ const COMMANDS: Record<string, "help" | "language" | "delete" | "undo" | "share"
 };
 
 export async function handleMessage(deps: Deps, msg: InboundMessage): Promise<void> {
+  // A reaction is not a message to us: no user, no row, no reply. Reacting just after DELETE must not sign the number up again.
+  if (msg.type === "reaction") return;
   const started = Date.now();
   const now = deps.now?.() ?? new Date();
   const ref = parseRef(msg.text?.body) ?? (msg.referral?.source_id ? `AD_${msg.referral.source_id}`.slice(0, 40) : null);
@@ -86,7 +92,8 @@ async function dispatch(ctx: Ctx, out: Outcome): Promise<void> {
       return;
     }
     const lastPrompt = await deps.repo.lastIntentAt(user.id, "consent_prompt");
-    if (lastPrompt && ctx.now.getTime() - lastPrompt.getTime() < CONSENT_REPROMPT_MS) {
+    const window = msg.type === "text" || msg.type === "audio" ? CONSENT_BURST_MS : CONSENT_REPROMPT_MS;
+    if (lastPrompt && ctx.now.getTime() - lastPrompt.getTime() < window) {
       out.intent = "consent_pending";
       return;
     }

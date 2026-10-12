@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { handleMessage } from "../src/pipeline/handle.js";
-import { FAKE_NOW, makeDeps, pick, PHONE, tap, text, voice } from "./fakes.js";
+import { FAKE_NOW, makeDeps, pick, PHONE, reaction, tap, text, voice } from "./fakes.js";
 
 async function onboarded(lang = "lang_en") {
   const t = makeDeps();
@@ -41,17 +41,54 @@ describe("onboarding", () => {
     expect(sent.at(-2)?.kind).toBe("list");
   });
 
-  it("sends the consent prompt once for a burst of messages, again after 10 minutes", async () => {
+  it("sends one consent prompt for a burst of texts and voice notes", async () => {
     const t = makeDeps();
     await handleMessage(t.deps, text("Hi"));
     await handleMessage(t.deps, text("Hello"));
     await handleMessage(t.deps, voice());
     expect(t.sent.map((s) => s.kind)).toEqual(["buttons"]);
     expect(t.state.messages.map((m) => m.intent)).toEqual(["consent_prompt", "consent_pending", "consent_pending"]);
+  });
 
+  it("sends the consent prompt again for a text or voice note after the burst, in case the chat was cleared", async () => {
+    const t = makeDeps();
+    const at = (ms: number) => () => new Date(new Date(FAKE_NOW).getTime() + ms);
+    await handleMessage(t.deps, text("Hi"));
+    t.deps.now = at(2 * 60_000);
+    await handleMessage(t.deps, text("Hello?"));
+    t.deps.now = at(4 * 60_000);
+    await handleMessage(t.deps, voice());
+    expect(t.sent.map((s) => s.kind)).toEqual(["buttons", "buttons", "buttons"]);
+  });
+
+  it("waits 10 minutes before prompting again for a sticker", async () => {
+    const t = makeDeps();
+    const sticker = () => ({ ...text(""), type: "sticker", text: undefined });
+    await handleMessage(t.deps, text("Hi"));
+    t.deps.now = () => new Date(new Date(FAKE_NOW).getTime() + 2 * 60_000);
+    await handleMessage(t.deps, sticker());
     t.deps.now = () => new Date(new Date(FAKE_NOW).getTime() + 11 * 60_000);
-    await handleMessage(t.deps, text("Hi again"));
+    await handleMessage(t.deps, sticker());
     expect(t.sent.map((s) => s.kind)).toEqual(["buttons", "buttons"]);
+  });
+});
+
+describe("reactions", () => {
+  it("ignores a reaction from an unknown number: no user, no row, no reply", async () => {
+    const t = makeDeps();
+    await handleMessage(t.deps, reaction("wamid.out1"));
+    expect(t.state.users.size).toBe(0);
+    expect(t.state.messages).toHaveLength(0);
+    expect(t.sent).toHaveLength(0);
+  });
+
+  it("ignores a reaction from an onboarded user", async () => {
+    const t = await onboarded();
+    const rows = t.state.messages.length;
+    await handleMessage(t.deps, reaction("wamid.out1", "❤️"));
+    expect(t.state.messages).toHaveLength(rows);
+    expect(t.sent).toHaveLength(0);
+    expect(t.calls).toEqual([]);
   });
 });
 
