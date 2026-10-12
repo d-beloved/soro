@@ -89,7 +89,7 @@ The system prompt forbids new facts, numbers, products, banks, apps and investme
 Money records must be exact, so we check N-ATLaS's output in code instead of trusting it blindly:
 
 - **Deterministic amount check** ([`amounts.py`](../engine/soro_engine/amounts.py)). Every amount the router returns is matched against the amounts actually said in the message. The checker reads digits, "5k", English number words, and Yorùbá, Hausa and Igbo number words, including common ASR mis-hearings. If N-ATLaS gives a figure the message does not support, the figure is corrected. Amounts that were said but not recorded are flagged back to the user.
-- **Lists as one record.** "I buy meat 9,000, garri 1,000 and pepper 200" is recorded as one ₦10,200 expense.
+- **Lists as one record.** N-ATLaS is told to record "I buy meat 9,000, garri 1,000 and pepper 200" as one ₦10,200 expense. When it adds up only some of the amounts (₦9,200 here), the check keeps that figure and tells the user it also heard ₦1,000, so they can correct the record. Next, the check will use the full total when the record names every item.
 - **English second listen.** Many people say amounts in English inside a Yorùbá, Hausa or Igbo sentence. If no amount can be read from the first transcript, the engine also runs the English ASR. N-ATLaS then sees both transcripts and uses the readable amount.
 - **Field clean-up.** A field that does not belong to the intent is dropped. One example is a category on a sale.
 - **Corrections and undo.** Users can say *"no, na 7,000"* or *"undo"*, so they can fix anything the model gets wrong.
