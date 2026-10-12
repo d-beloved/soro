@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" font-family="Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <style>
+      .t{font-size:15px;font-weight:700;fill:#0f172a}
+      .s{font-size:12.5px;fill:#334155}
+      .h{font-size:13px;font-weight:700;letter-spacing:.06em;fill:#64748b}
+      .l{font-size:12px;fill:#475569}
+      .ln{stroke:#475569;stroke-width:1.8;fill:none}
+    </style>
+  </defs>
+  <rect width="1200" height="760" fill="#ffffff"/>
+
+  <text x="40" y="44" font-size="24" font-weight="800" fill="#0f172a">Sọ̀rọ̀ (SoroEngine) architecture</text>
+  <text x="40" y="68" class="s">WhatsApp voice note in, written reply and voice note out, in English, Pidgin, Yorùbá, Hausa or Igbo</text>
+
+  <!-- User -->
+  <rect x="40" y="110" width="170" height="92" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="125" y="146" class="t" text-anchor="middle">User on WhatsApp</text>
+  <text x="125" y="168" class="s" text-anchor="middle">voice note or text</text>
+  <text x="125" y="186" class="s" text-anchor="middle">any phone, no app</text>
+
+  <!-- Meta -->
+  <rect x="270" y="110" width="170" height="92" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="355" y="146" class="t" text-anchor="middle">Meta WhatsApp</text>
+  <text x="355" y="166" class="t" text-anchor="middle">Cloud API</text>
+  <text x="355" y="186" class="s" text-anchor="middle">webhook + media</text>
+
+  <!-- Gateway -->
+  <rect x="500" y="96" width="320" height="214" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="660" y="124" class="t" text-anchor="middle">Gateway · Node 22 + Hono + TypeScript</text>
+  <text x="660" y="142" class="l" text-anchor="middle">Render (soroengine.onrender.com)</text>
+  <text x="520" y="170" class="s">• Signature check, consent (NDPA 2023)</text>
+  <text x="520" y="190" class="s">• Language per user, switch by asking</text>
+  <text x="520" y="210" class="s">• Intent handlers: records, debts, stock,</text>
+  <text x="532" y="228" class="s">budgets, summaries, undo, corrections</text>
+  <text x="520" y="248" class="s">• Voice Tutor: curated tip → N-ATLaS</text>
+  <text x="520" y="268" class="s">• Hand-written yo / ha / ig strings</text>
+  <text x="520" y="288" class="s">• Reply: text first, then voice note</text>
+
+  <!-- Supabase -->
+  <rect x="900" y="110" width="260" height="120" rx="12" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="1030" y="144" class="t" text-anchor="middle">Supabase Postgres (EU)</text>
+  <text x="1030" y="166" class="s" text-anchor="middle">users (phone = salted SHA-256)</text>
+  <text x="1030" y="186" class="s" text-anchor="middle">records, debts, stock, budgets</text>
+  <text x="1030" y="206" class="s" text-anchor="middle">messages log + latency, tips</text>
+
+  <!-- arrows top row -->
+  <path class="ln" d="M210,145 L268,145" marker-end="url(#a)"/>
+  <path class="ln" d="M268,170 L212,170" marker-end="url(#a)"/>
+  <path class="ln" d="M440,145 L498,145" marker-end="url(#a)"/>
+  <path class="ln" d="M498,170 L442,170" marker-end="url(#a)"/>
+  <path class="ln" d="M820,160 L898,160" marker-end="url(#a)"/>
+  <path class="ln" d="M898,182 L822,182" marker-end="url(#a)"/>
+
+  <!-- Engine box -->
+  <rect x="40" y="380" width="1120" height="330" rx="14" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="60" y="410" class="t">AI engine · FastAPI on Modal · T4 GPU (L4 fallback) · scales to zero</text>
+  <text x="60" y="430" class="l">endpoints: /transcribe  /route  /adapt  /speak   ·   bearer token   ·   all models loaded from a Modal volume</text>
+
+  <!-- ASR -->
+  <rect x="64" y="452" width="300" height="236" rx="12" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="80" y="478" class="h">1 · HEAR (NCAIR ASR)</text>
+  <text x="80" y="502" class="s">NCAIR1/NigerianAccentedEnglish</text>
+  <text x="80" y="520" class="s">NCAIR1/Yoruba-ASR</text>
+  <text x="80" y="538" class="s">NCAIR1/Hausa-ASR</text>
+  <text x="80" y="556" class="s">NCAIR1/Igbo-ASR</text>
+  <text x="80" y="582" class="s">• Spoken language picked from the</text>
+  <text x="92" y="600" class="s">four models' own confidence</text>
+  <text x="80" y="620" class="s">• Second English listen when a</text>
+  <text x="92" y="638" class="s">Yorùbá/Hausa/Igbo note has no</text>
+  <text x="92" y="656" class="s">readable amount</text>
+
+  <!-- N-ATLaS -->
+  <rect x="404" y="452" width="400" height="236" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2.5"/>
+  <text x="420" y="478" class="h" fill="#c2410c">2 · UNDERSTAND (N-ATLaS)</text>
+  <text x="420" y="502" class="s" font-weight="700">NCAIR1/N-ATLaS (Llama-3 8B), official weights</text>
+  <text x="420" y="520" class="s">→ GGUF f16 → Q4_K_M (~5 GB) with llama.cpp,</text>
+  <text x="420" y="538" class="s">served by llama-cpp-python on CUDA</text>
+  <text x="420" y="564" class="s">• Router: message → JSON intent, constrained</text>
+  <text x="432" y="582" class="s">by a JSON-schema grammar (16 intents)</text>
+  <text x="420" y="602" class="s">• Category call when spending has no category</text>
+  <text x="420" y="622" class="s">• Voice Tutor: rephrases one curated tip in the</text>
+  <text x="432" y="640" class="s">user's language, no new advice</text>
+  <text x="420" y="664" class="s">+ deterministic amount check (amounts.py)</text>
+
+  <!-- TTS -->
+  <rect x="844" y="452" width="292" height="236" rx="12" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="860" y="478" class="h">3 · SPEAK (TTS)</text>
+  <text x="860" y="502" class="s">k2-fsa/OmniVoice (en, ha, ig)</text>
+  <text x="860" y="520" class="s">Sam4rano/omnivoice-yoruba-tts (yo)</text>
+  <text x="860" y="546" class="s">• One fixed voice per language</text>
+  <text x="860" y="566" class="s">• Amounts spelled out as words</text>
+  <text x="872" y="584" class="s">in each language (numwords.py)</text>
+  <text x="860" y="604" class="s">• ~1.6 s per reply clip on a T4</text>
+  <text x="860" y="624" class="s">• OGG/Opus voice note back to</text>
+  <text x="872" y="642" class="s">WhatsApp</text>
+
+  <path class="ln" d="M364,570 L402,570" marker-end="url(#a)"/>
+  <path class="ln" d="M804,570 L842,570" marker-end="url(#a)"/>
+
+  <!-- gateway <-> engine -->
+  <path class="ln" d="M610,310 L610,378" marker-end="url(#a)"/>
+  <path class="ln" d="M710,378 L710,312" marker-end="url(#a)"/>
+  <text x="430" y="350" class="l">audio, text, tip (HTTPS)</text>
+  <text x="722" y="350" class="l">transcript + language, intent JSON, tutor text, voice</text>
+</svg>
