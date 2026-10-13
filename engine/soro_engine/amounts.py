@@ -347,7 +347,11 @@ def reconcile_amount(result: dict, text: str) -> dict:
     llm = result.get("amount_ngn")
     if isinstance(llm, (int, float)) and not _accounted(llm, pool, qty) and _accounted(llm, every, qty):
         pool = every  # a list whose amounts aren't all marked as money: "egg 9k and milk 4500" = 13,500
-    if not (isinstance(llm, (int, float)) and llm > 0 and _accounted(llm, pool, qty)):
+    if result["intent"] in MULTI_CHECK and len(every) > 1 and _item_count(result.get("item")) == len(every):
+        # the item names one thing per amount ("meat, garri, pepper" for 9k, 1k, 200): the record is the whole list,
+        # even when the model added up only some of it (9,200)
+        result = {**result, "amount_ngn": sum(every)}
+    elif not (isinstance(llm, (int, float)) and llm > 0 and _accounted(llm, pool, qty)):
         result = {**result, "amount_ngn": _list_total(result["intent"], llm, pool) or best}
     if result["intent"] in MULTI_CHECK:
         others = other_amounts(result["amount_ngn"], pool, qty)
@@ -370,6 +374,16 @@ def _list_total(intent: str, llm: object, values: list[int]) -> int | None:
     if intent in MULTI_CHECK and len(values) > 1 and isinstance(llm, (int, float)) and abs(llm - total) <= 0.1 * total:
         return total
     return None
+
+
+_ITEM_SEP = re.compile(r",|&|\+|\band\b|\bati\b")
+
+
+def _item_count(item: object) -> int:
+    """How many things the record's item names: "meat, garri and pepper" is 3."""
+    if not isinstance(item, str):
+        return 0
+    return len([p for p in _ITEM_SEP.split(_normalise(item)) if p.strip()])
 
 
 def _group(recorded: float, values: list[int]) -> tuple[int, ...] | None:

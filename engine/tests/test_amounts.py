@@ -133,11 +133,21 @@ def test_reconcile_lists_read_as_one_record():
     assert reconcile_amount(r, text) == r
     # the model meant the total but added wrong: the real total, nothing reported as left out
     assert reconcile_amount({**r, "amount_ngn": 10100}, text) == r
-    # a total of some of them is taken as meant, and the rest reported
-    assert reconcile_amount({**r, "amount_ngn": 10000}, text)["other_amounts"] == [200]
+    # the item names all three, so a total of only some of them, or a figure far off, is the whole list
+    assert reconcile_amount({**r, "amount_ngn": 10000}, text) == r
+    assert reconcile_amount({**r, "amount_ngn": 50000}, text) == r
+    # an item that doesn't name each one: a total of some of them is taken as meant, and the rest reported
+    food = {**r, "item": "food"}
+    assert reconcile_amount({**food, "amount_ngn": 10000}, text)["other_amounts"] == [200]
     # far from the total: the largest amount, and the rest reported
-    out = reconcile_amount({**r, "amount_ngn": 50000}, text)
+    out = reconcile_amount({**food, "amount_ngn": 50000}, text)
     assert out["amount_ngn"] == 9000 and out["other_amounts"] == [1000, 200]
+    # corrections review, Oct 13 2026: saved as 9,200 (the meat and the pepper), garri reported as left out
+    r = {"intent": "log_expense", "item": "meat, garri, pepper", "category": "food", "amount_ngn": 9200}
+    assert reconcile_amount(r, "i buy meat 9k, garri 1k, and pepper 200.") == {**r, "amount_ngn": 10200}
+    # fewer names than amounts is still a separate record left out
+    r = {"intent": "log_sale", "item": "rice and beans", "amount_ngn": 8000}
+    assert reconcile_amount(r, "I sell rice 5k and beans 3k, and I buy fuel 2k")["other_amounts"] == [2000]
     # a correction is not a list: "not 5k, 7k" stays on the parsed amount
     assert reconcile_amount({"intent": "correct_last", "amount_ngn": 12500}, "not 5k, 7k")["amount_ngn"] == 7000
 
