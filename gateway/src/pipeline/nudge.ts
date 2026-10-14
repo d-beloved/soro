@@ -1,6 +1,7 @@
 import type { Repo } from "../db/repo.js";
 import type { Lang } from "../domain/intents.js";
 import type { Logger } from "../lib/logger.js";
+import { seal, unseal } from "../lib/seal.js";
 import { t } from "../locales/index.js";
 import type { WhatsAppApi } from "../whatsapp/client.js";
 
@@ -28,34 +29,78 @@ export function nudgeDelay(at: Date, afterMs = NUDGE_AFTER_MS): number | null {
   return send - at.getTime() > WINDOW_MS ? null : send - at.getTime();
 }
 
+/** How often the gateway looks for reminders that are due. */
+export const POLL_MS = 60_000;
+
 /**
- * Reminds people who onboarded but never recorded anything. We keep no phone numbers, only their hash,
- * so the number lives in memory with the timer: a restart forgets pending reminders, and that is the trade.
+ * Reminds people who onboarded but never recorded anything. We keep no phone numbers, only their hash, so the
+ * pending reminder stores the number sealed with NUDGE_KEY (lib/seal.ts) and drops it as soon as the reminder
+ * is sent or no longer needed. Pending reminders live in the database, so they survive a gateway restart.
  */
 export class Nudger {
-  private timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private poll?: ReturnType<typeof setInterval>;
+  private ticking = false;
 
   constructor(
-    private deps: { repo: Repo; wa: WhatsAppApi; log: Pick<Logger, "info" | "warn" | "error"> },
+    private deps: { repo: Repo; wa: WhatsAppApi; log: Pick<Logger, "info" | "warn" | "error">; key: Buffer },
     private afterMs = NUDGE_AFTER_MS,
   ) {}
 
-  /** A message from someone set up to record: their clock starts again from now. */
-  seen(userId: string, phone: string, lang: Lang, at: Date): void {
-    clearTimeout(this.timers.get(userId));
-    this.timers.delete(userId);
-    const delay = nudgeDelay(at, this.afterMs);
-    if (delay === null) return;
-    const timer = setTimeout(() => {
-      this.timers.delete(userId);
-      this.send(userId, phone, lang).catch((err) => this.deps.log.error({ err, userId }, "nudge failed"));
-    }, delay);
-    timer.unref?.();
-    this.timers.set(userId, timer);
+  /** A message from someone set up to record: their clock starts again from now. Never throws. */
+  async seen(userId: string, phone: string, lang: Lang, at: Date): Promise<void> {
+    try {
+      const delay = nudgeDelay(at, this.afterMs);
+      if (delay === null) return await this.deps.repo.cancelNudge(userId);
+      await this.deps.repo.scheduleNudge({
+        user_id: userId,
+        phone_enc: seal(phone, this.deps.key, userId),
+        language: lang,
+        due_at: new Date(at.getTime() + delay),
+        expires_at: new Date(at.getTime() + WINDOW_MS),
+      });
+    } catch (err) {
+      this.deps.log.error({ err, userId }, "nudge scheduling failed");
+    }
+  }
+
+  start(pollMs = POLL_MS): void {
+    this.stop();
+    this.poll = setInterval(() => void this.tick(), pollMs);
+    this.poll.unref?.();
+    void this.tick(); // whatever came due while the gateway was down
+  }
+
+  stop(): void {
+    clearInterval(this.poll);
+    this.poll = undefined;
+  }
+
+  /** Sends every reminder that is due. */
+  async tick(now = new Date()): Promise<void> {
+    if (this.ticking) return;
+    this.ticking = true;
+    try {
+      for (const row of await this.deps.repo.takeDueNudges(now)) {
+        // Down past the 24-hour window (a long outage): WhatsApp would refuse it, so let it go.
+        if (new Date(row.expires_at) <= now) {
+          this.deps.log.warn({ userId: row.user_id }, "nudge expired before it could be sent");
+          continue;
+        }
+        try {
+          await this.send(row.user_id, unseal(row.phone_enc, this.deps.key, row.user_id), row.language);
+        } catch (err) {
+          this.deps.log.error({ err, userId: row.user_id }, "nudge failed");
+        }
+      }
+    } catch (err) {
+      this.deps.log.error({ err }, "nudge poll failed");
+    } finally {
+      this.ticking = false;
+    }
   }
 
   private async send(userId: string, phone: string, lang: Lang): Promise<void> {
-    // Claimed first: a second gateway or a retry can't send it twice.
+    // Checked again at send time: they may have recorded something since, and nobody is reminded twice.
     if (!(await this.deps.repo.claimNudge(userId))) return;
     await this.deps.wa.sendText(phone, t(lang, "nudge"));
     await this.deps.repo.insertOutbound({ user_id: userId, type: "text", language: lang, payload: { nudge: true } });

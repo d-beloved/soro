@@ -64,6 +64,15 @@ export interface DebtRow {
   total: number;
 }
 
+/** A reminder waiting to go out; the phone number is sealed (lib/seal.ts). */
+export interface PendingNudge {
+  user_id: string;
+  phone_enc: string;
+  language: Lang;
+  due_at: string;
+  expires_at: string;
+}
+
 export interface Repo {
   getOrCreateUser(phoneHash: string, refSource: string | null): Promise<UserRow>;
   setConsent(userId: string): Promise<void>;
@@ -109,6 +118,11 @@ export interface Repo {
   insertTipDelivery(row: { user_id: string; tip_id: string; message_id: string; trigger: "asked" | "auto"; audio_sent: boolean }): Promise<void>;
   /** Marks the user reminded, if they have never recorded anything and were not reminded before; false otherwise. */
   claimNudge(userId: string): Promise<boolean>;
+  /** Starts the user's reminder clock if they could still be reminded; otherwise drops any pending one. */
+  scheduleNudge(row: Omit<PendingNudge, "due_at" | "expires_at"> & { due_at: Date; expires_at: Date }): Promise<void>;
+  cancelNudge(userId: string): Promise<void>;
+  /** Removes and returns every reminder due by `now`: whoever takes a row sends it, so no two gateways both do. */
+  takeDueNudges(now: Date): Promise<PendingNudge[]>;
 }
 
 const UNIQUE_VIOLATION = "23505";
@@ -284,6 +298,28 @@ export function createRepo(url: string, serviceRoleKey: string): Repo {
         await db.from("users").update({ nudged_at: new Date().toISOString() }).eq("id", userId).is("nudged_at", null).select("id"),
       ) as { id: string }[] | null;
       return (rows ?? []).length > 0;
+    },
+
+    async scheduleNudge(row) {
+      check(
+        await db.rpc("schedule_nudge", {
+          p_user: row.user_id,
+          p_phone_enc: row.phone_enc,
+          p_language: row.language,
+          p_due: row.due_at.toISOString(),
+          p_expires: row.expires_at.toISOString(),
+        }),
+      );
+    },
+
+    async cancelNudge(userId) {
+      check(await db.from("pending_nudges").delete().eq("user_id", userId));
+    },
+
+    async takeDueNudges(now) {
+      return (check(
+        await db.from("pending_nudges").delete().lte("due_at", now.toISOString()).select("user_id, phone_enc, language, due_at, expires_at"),
+      ) ?? []) as PendingNudge[];
     },
   };
 }

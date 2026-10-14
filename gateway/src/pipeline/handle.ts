@@ -61,7 +61,7 @@ export async function handleMessage(deps: Deps, msg: InboundMessage): Promise<vo
     await dispatch(ctx, outcome).finally(() => clearTimeout(ctx.slowNotice));
     // Anyone set up to record starts their reminder clock again; the reminder checks they still have nothing recorded.
     if (user.consent_at && (user.language || outcome.intent === "language_set") && outcome.intent !== "deleted") {
-      deps.nudger?.seen(user.id, msg.from, ctx.lang, now);
+      await deps.nudger?.seen(user.id, msg.from, ctx.lang, now);
     }
     await deps.repo.updateMessage(messageId, { ...outcome, language: outcome.language ?? ctx.lang, latency_ms: Date.now() - started });
   } catch (err) {

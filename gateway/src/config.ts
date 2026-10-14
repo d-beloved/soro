@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Unset or left blank (as copied from .env.example). */
+const optional = <T extends z.ZodTypeAny>(schema: T) => z.preprocess((v) => (v === "" ? undefined : v), schema.optional());
+
 const Env = z.object({
   PORT: z.coerce.number().default(3000),
   LOG_LEVEL: z.string().default("info"),
@@ -17,6 +20,9 @@ const Env = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
 
   PHONE_HASH_SALT: z.string().min(16),
+  // 32 random bytes, base64 (openssl rand -base64 32). Seals the phone number of a pending reminder; without it
+  // no reminders are sent. Changing it only loses reminders pending at that moment.
+  NUDGE_KEY: optional(z.string()),
   PRIVACY_URL: z.string().url().default("https://soro.charavol.com/privacy"),
   // The bot's public WhatsApp number (digits only), used in SHARE links.
   WA_PUBLIC_NUMBER: z.string().regex(/^\d{10,15}$/).default("2349077485454"),

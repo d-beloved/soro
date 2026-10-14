@@ -24,7 +24,7 @@ Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on Ren
 Landing page, privacy, terms ─────── site/  (static, Cloudflare Pages → soro.charavol.com)
 ```
 
-- **Privacy:** phone numbers are stored only as a salted SHA-256 hash. Nothing happens before the user consents (NDPA 2023). Audio is never stored. `DELETE` erases a user and everything they sent, as does the purge of users inactive for 12 months; each leaves only an unlinkable row per message (time, voice or text, language, intent) so usage counts survive.
+- **Privacy:** phone numbers are stored only as a salted SHA-256 hash. The one exception is a pending reminder, which keeps the number AES-256-GCM encrypted (key only in the gateway) for at most 23 hours. Nothing happens before the user consents (NDPA 2023). Audio is never stored. `DELETE` erases a user and everything they sent, as does the purge of users inactive for 12 months; each leaves only an unlinkable row per message (time, voice or text, language, intent) so usage counts survive.
 - **Tips** come only from the curated library in `supabase/seed/tips.sql`. The LLM rephrases a tip; it does not invent advice.
 
 ## Repository
@@ -33,7 +33,7 @@ Landing page, privacy, terms ─────── site/  (static, Cloudflare Pa
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gateway/`               | WhatsApp webhook service. `src/pipeline/handle.ts` is the message flow.                                                                                                                                                                                   |
 | `engine/`                | GPU model service. `soro_engine/api.py` holds the endpoints and `modal_app.py` the deployment.                                                                                                                                                            |
-| `supabase/migrations/`   | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), personal money, budgets and undo (`0003_personal_money.sql`), the gateway's table privileges (`0004_service_role_grants.sql`), the export view names (`0005_rename_views.sql`), and anonymise-on-delete (`0006_anonymise_on_delete.sql`). |
+| `supabase/migrations/`   | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), personal money, budgets and undo (`0003_personal_money.sql`), the gateway's table privileges (`0004_service_role_grants.sql`), the export view names (`0005_rename_views.sql`), anonymise-on-delete (`0006_anonymise_on_delete.sql`), the reminder (`0007_nudge.sql`) and pending reminders (`0008_pending_nudges.sql`). |
 | `supabase/seed/tips.sql` | The financial-literacy tip library.                                                                                                                                                                                                                       |
 | `site/`                  | Landing page, privacy notice, terms, logo and the WhatsApp profile image.                                                                                                                                                                                 |
 | `scripts/`               | `set_whatsapp_number.py` (puts the number and QR into the site) and `serve_site.mjs` (local preview).                                                                                                                                                     |
@@ -82,7 +82,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
 
 ## Deploy
 
-1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `0005_rename_views.sql`, then `0006_anonymise_on_delete.sql`, then `0007_nudge.sql`, then `supabase/seed/tips.sql`.
+1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `0005_rename_views.sql`, then `0006_anonymise_on_delete.sql`, then `0007_nudge.sql`, then `0008_pending_nudges.sql`, then `supabase/seed/tips.sql`.
 2. **Engine on Modal:**
    ```bash
    cd engine
@@ -92,7 +92,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
    uv run --with modal modal deploy modal_app.py
    ```
    The deploy prints the engine URL. Containers scale to zero after 5 idle minutes, so the first message after a quiet spell waits for a cold start (about 45s). `modal run modal_app.py::warm --on` keeps one up until the next deploy, e.g. for a demo; `--no-on` lets it sleep again.
-3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (with `ENGINE_URL` set to the Modal URL, and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
+3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (with `ENGINE_URL` set to the Modal URL, `NUDGE_KEY` from `openssl rand -base64 32`, and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
 4. **Meta webhook:** set the callback URL to `https://<your-gateway>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
 5. **Site on Cloudflare Pages:** `npx wrangler pages deploy site --project-name <your-project> --branch main`.
 

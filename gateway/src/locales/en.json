@@ -1,5 +1,5 @@
 {
-  "consent_prompt": "Welcome to Sọ̀rọ̀ 👋 Talk am, I go write am.\nTell me what you spend, earn, sell or lend, by voice note or text, and I'll keep the record. Ask \"Where my money dey go?\" anytime.\n\nWe save what you tell us so we can answer you. We do not store your phone number. Type DELETE anytime to remove everything.\nPrivacy: {privacy_url}\n\nDo you agree?",
+  "consent_prompt": "Welcome to Sọ̀rọ̀ 👋 Talk am, I go write am.\nTell me what you spend, earn, sell or lend, by voice note or text, and I'll keep the record. Ask \"Where my money dey go?\" anytime.\n\nWe save what you tell us so we can answer you. We do not store your phone number, except encrypted for up to a day if we need to send you a reminder. Type DELETE anytime to remove everything.\nPrivacy: {privacy_url}\n\nDo you agree?",
   "consent_yes": "I agree",
   "consent_no": "No thanks",
   "consent_declined": "No wahala. If you change your mind, just send any message.",

@@ -1,4 +1,4 @@
-import type { DebtRow, Repo, SummaryRow, TipRow, UserRow } from "../src/db/repo.js";
+import type { DebtRow, PendingNudge, Repo, SummaryRow, TipRow, UserRow } from "../src/db/repo.js";
 import type { Lang } from "../src/domain/intents.js";
 import type { EngineApi } from "../src/engine/client.js";
 import type { Deps } from "../src/pipeline/context.js";
@@ -25,6 +25,7 @@ export function fakeRepo() {
     tipDeliveries: [] as any[],
     budgets: new Map<string, number>(),
     nudged: new Set<string>(),
+    pendingNudges: new Map<string, PendingNudge>(),
   };
   let n = 0;
   const repo: Repo = {
@@ -43,6 +44,7 @@ export function fakeRepo() {
     },
     async deleteUser(id) {
       users.delete(id);
+      state.pendingNudges.delete(id); // on delete cascade
     },
     async insertInbound(row) {
       if (seenWa.has(row.wa_message_id)) return null;
@@ -121,6 +123,22 @@ export function fakeRepo() {
       if (!users.has(userId) || state.nudged.has(userId) || state.txns.some((t) => t.user_id === userId)) return false;
       state.nudged.add(userId);
       return true;
+    },
+    // Same rule as the schedule_nudge SQL function.
+    async scheduleNudge(row) {
+      if (users.has(row.user_id) && !state.nudged.has(row.user_id) && !state.txns.some((t) => t.user_id === row.user_id)) {
+        state.pendingNudges.set(row.user_id, { ...row, due_at: row.due_at.toISOString(), expires_at: row.expires_at.toISOString() });
+      } else {
+        state.pendingNudges.delete(row.user_id);
+      }
+    },
+    async cancelNudge(userId) {
+      state.pendingNudges.delete(userId);
+    },
+    async takeDueNudges(now) {
+      const due = [...state.pendingNudges.values()].filter((r) => new Date(r.due_at) <= now);
+      for (const r of due) state.pendingNudges.delete(r.user_id);
+      return due;
     },
   };
   return { repo, state };
