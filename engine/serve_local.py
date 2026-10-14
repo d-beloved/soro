@@ -1,4 +1,4 @@
-"""Run the engine on your Mac (Metal for N-ATLaS, MPS for Whisper and OmniVoice).
+"""Run the engine on your Mac (Metal for N-ATLaS, MPS for Whisper and OmniVoice), or in the GPU container (Dockerfile).
 
   uv run python serve_local.py                # everything
   uv run python serve_local.py --no-tts       # faster startup; set VOICE_REPLIES=off in gateway/.env
@@ -22,6 +22,7 @@ if __name__ == "__main__":
     p.add_argument("--no-llm", action="store_true")
     p.add_argument("--no-tts", action="store_true")
     p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--host", default="127.0.0.1", help="0.0.0.0 inside a container, behind the HTTPS proxy")
     a = p.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -31,4 +32,4 @@ if __name__ == "__main__":
 
     engine = SoroEngine(Parts(asr=not a.no_asr, llm=not a.no_llm, tts=not a.no_tts))
     engine.load()
-    uvicorn.run(create_api(engine, token), host="127.0.0.1", port=a.port)
+    uvicorn.run(create_api(engine, token), host=a.host, port=a.port)

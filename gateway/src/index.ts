@@ -20,7 +20,13 @@ const app = createApp({
   appSecret: cfg.WA_APP_SECRET,
   deps: {
     wa,
-    engine: createEngineClient({ baseUrl: cfg.ENGINE_URL, token: cfg.ENGINE_TOKEN }),
+    engine: createEngineClient({
+      baseUrl: cfg.ENGINE_URL,
+      token: cfg.ENGINE_TOKEN,
+      timeoutMs: cfg.ENGINE_TIMEOUT_MS,
+      fallbackUrl: cfg.ENGINE_FALLBACK_URL,
+      log: logger,
+    }),
     repo,
     log: logger,
     nudger,

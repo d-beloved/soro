@@ -1,0 +1,49 @@
+# The engine on one GPU server: the engine container, with Caddy in front for HTTPS. See README.md.
+# Run from engine/aws:  docker compose up -d --build
+services:
+  engine:
+    build: ..
+    image: soro-engine
+    restart: unless-stopped
+    environment:
+      ENGINE_TOKEN: ${ENGINE_TOKEN:?set ENGINE_TOKEN in engine/aws/.env}
+    volumes:
+      - /opt/soro/models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Not published: only Caddy reaches it.
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5m  # loading every model takes a minute or two
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  caddy:
+    image: caddy:2.10.2
+    restart: unless-stopped
+    environment:
+      ENGINE_DOMAIN: ${ENGINE_DOMAIN:?set ENGINE_DOMAIN in engine/aws/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - engine
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  caddy-data:  # the TLS certificate; kept so restarts don't ask Let's Encrypt for a new one

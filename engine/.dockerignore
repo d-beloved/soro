@@ -1,0 +1,4 @@
+*
+!soro_engine/
+!serve_local.py
+soro_engine/__pycache__

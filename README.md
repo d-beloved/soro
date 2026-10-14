@@ -17,7 +17,7 @@ WhatsApp user
 Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on Render)
                                       │  consent, routing, commerce, tutor, replies
                                       ├──▶ Supabase Postgres (EU)        supabase/
-                                      └──▶ engine/  (FastAPI on Modal, T4 GPU)
+                                      └──▶ engine/  (FastAPI on an AWS T4 GPU, Modal as fallback)
                                              • ASR: NCAIR Nigerian-accented English, Yoruba, Hausa, Igbo (Whisper-small)
                                              • LLM: N-ATLaS (Llama-3 8B) as GGUF Q4_K_M via llama.cpp: intent routing, tip adaptation, translation
                                              • TTS: OmniVoice (Yoruba fine-tune for Yoruba) → Opus voice note
@@ -32,7 +32,7 @@ Landing page, privacy, terms ─────── site/  (static, Cloudflare Pa
 | Path                     | What                                                                                                                                                                                                                                                      |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gateway/`               | WhatsApp webhook service. `src/pipeline/handle.ts` is the message flow.                                                                                                                                                                                   |
-| `engine/`                | GPU model service. `soro_engine/api.py` holds the endpoints and `modal_app.py` the deployment.                                                                                                                                                            |
+| `engine/`                | GPU model service. `soro_engine/api.py` holds the endpoints, `aws/` and `Dockerfile` the AWS deployment, `modal_app.py` the Modal one.                                                                                                                                                            |
 | `supabase/migrations/`   | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), personal money, budgets and undo (`0003_personal_money.sql`), the gateway's table privileges (`0004_service_role_grants.sql`), the export view names (`0005_rename_views.sql`), anonymise-on-delete (`0006_anonymise_on_delete.sql`), the reminder (`0007_nudge.sql`) and pending reminders (`0008_pending_nudges.sql`). |
 | `supabase/seed/tips.sql` | The financial-literacy tip library.                                                                                                                                                                                                                       |
 | `site/`                  | Landing page, privacy notice, terms, logo and the WhatsApp profile image.                                                                                                                                                                                 |
@@ -83,7 +83,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
 ## Deploy
 
 1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `0005_rename_views.sql`, then `0006_anonymise_on_delete.sql`, then `0007_nudge.sql`, then `0008_pending_nudges.sql`, then `supabase/seed/tips.sql`.
-2. **Engine on Modal:**
+2. **Engine on Modal** (the fallback, and the whole engine if you skip AWS):
    ```bash
    cd engine
    uv run --with modal modal token new
@@ -92,7 +92,8 @@ node scripts/serve_site.mjs       # http://localhost:4321
    uv run --with modal modal deploy modal_app.py
    ```
    The deploy prints the engine URL. Containers scale to zero after 5 idle minutes, so the first message after a quiet spell waits for a cold start (about 45s). `modal run modal_app.py::warm --on` keeps one up until the next deploy, e.g. for a demo; `--no-on` lets it sleep again.
-3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (with `ENGINE_URL` set to the Modal URL, `NUDGE_KEY` from `openssl rand -base64 32`, and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
+   **Engine on AWS** (main, always on): follow [engine/aws/README.md](engine/aws/README.md).
+3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (`ENGINE_URL` set to the AWS engine and `ENGINE_FALLBACK_URL` to the Modal URL, or `ENGINE_URL` to Modal alone; `NUDGE_KEY` from `openssl rand -base64 32`; and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
 4. **Meta webhook:** set the callback URL to `https://<your-gateway>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
 5. **Site on Cloudflare Pages:** `npx wrangler pages deploy site --project-name <your-project> --branch main`.
 

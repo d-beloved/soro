@@ -1,0 +1,9 @@
+# HTTPS for the engine, with a Let's Encrypt certificate Caddy gets and renews itself.
+# ENGINE_DOMAIN's DNS A record must point at the server's Elastic IP before the first start.
+{$ENGINE_DOMAIN} {
+	# Voice notes can be up to 16 MB (WhatsApp's limit, checked again by the engine).
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy engine:8000
+}

@@ -15,6 +15,10 @@ const Env = z.object({
 
   ENGINE_URL: z.string().url(),
   ENGINE_TOKEN: z.string().min(16),
+  // Optional second engine (same ENGINE_TOKEN), used when ENGINE_URL fails: the Modal deployment behind AWS.
+  ENGINE_FALLBACK_URL: optional(z.string().url()),
+  // How long to wait for ENGINE_URL before trying the fallback. Without a fallback this covers a Modal cold start.
+  ENGINE_TIMEOUT_MS: optional(z.coerce.number().int().positive()),
 
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
