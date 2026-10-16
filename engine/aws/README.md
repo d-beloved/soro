@@ -8,22 +8,23 @@ Render gateway ──▶ https://engine.soro.charavol.com  (EC2 g4dn.xlarge, T4:
      └─ wakes the server (ec2:StartInstances) when it finds it asleep
 ```
 
-Region is eu-central-1 (Frankfurt), next to Render and Supabase and as the privacy notice says.
+Region is us-east-1 (N. Virginia), where the account has GPU quota. The server is a Spot instance: about 60% cheaper than On-Demand, but AWS can reclaim it at short notice. It then stops, AWS starts it again when capacity returns, and Modal answers meanwhile.
 
 ## Before you start
 
-In eu-central-1, request a quota increase for *Running On-Demand G and VT instances* (Service Quotas → Amazon EC2) to **4** vCPUs, one g4dn.xlarge. New accounts start at 0. Set a budget alert under Billing → Budgets.
+In us-east-1, Service Quotas → Amazon EC2 → *All G and VT Spot Instance Requests* must be at least **4** vCPUs (one g4dn.xlarge). New accounts start at 0, so request an increase. Set a budget alert under Billing → Budgets.
 
 ## 1. Launch the server
 
-EC2 → Launch instance, region **eu-central-1**:
+EC2 → Launch instance, region **us-east-1**:
 
-- **AMI:** *Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04)*. It comes with the NVIDIA driver, Docker and the NVIDIA container toolkit already installed.
+- **AMI:** *Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04)* (Browse more AMIs, then search `Deep Learning Base OSS`). It comes with the NVIDIA driver, Docker and the NVIDIA container toolkit already installed.
 - **Type:** `g4dn.xlarge` (T4 16 GB, 4 vCPU, 16 GB RAM). If the models run out of RAM, use `g4dn.2xlarge`, which has 32 GB.
 - **Storage:** 150 GB gp3 root volume. The image is about 20 GB and the models about 30 GB.
 - **Key pair:** create one and keep the `.pem`.
 - **Security group:** SSH (22) from *My IP* only; HTTP (80) and HTTPS (443) from anywhere. Caddy needs 80 open to get its certificate.
-- **Advanced details → Shutdown behavior:** **Stop** (the default). Never *Terminate*: the server shuts itself down when idle, and terminate would delete it.
+- **Advanced details → Purchasing option:** **Spot instances**, then *Customize*: request type **Persistent**, interruption behavior **Stop**, no request expiry date. Only a persistent Spot request can be stopped and started again.
+- **Advanced details → Shutdown behavior:** **Stop**, if it can be set. Never *Terminate*: that deletes the server and its models.
 - **Advanced details → Allow tags in metadata:** **Enable**, for the `stay-awake` tag (step 5). On a running instance: Actions → Instance settings → Allow tags in instance metadata.
 
 Then EC2 → Elastic IPs → Allocate, and associate it with the instance, so the address survives stop and start.
@@ -85,18 +86,22 @@ sudo cp ~/soro/engine/aws/soro-idle.service ~/soro/engine/aws/soro-idle.timer /e
 sudo systemctl daemon-reload && sudo systemctl enable --now soro-idle.timer
 ```
 
-It stops the server once the engine has gone 15 minutes without a request from the gateway (`idle_s` in `/health`), or when the engine still isn't answering 30 minutes after boot, so a broken server doesn't run up a bill. It leaves the server on while anyone is logged in over SSH, and while the instance has a `stay-awake` tag (see Day to day). To change the 15 minutes, edit `IDLE_MINUTES` in `soro-idle.service` (at least 10), copy it again and run `sudo systemctl daemon-reload`. Its log: `journalctl -u soro-idle`.
+It stops the server (through the EC2 API) once the engine has gone 15 minutes without a request from the gateway (`idle_s` in `/health`), or when the engine still isn't answering 30 minutes after boot, so a broken server doesn't run up a bill. It leaves the server on while anyone is logged in over SSH, and while the instance has a `stay-awake` tag (see Day to day). To change the 15 minutes, edit `IDLE_MINUTES` in `soro-idle.service` (at least 10), copy it again and run `sudo systemctl daemon-reload`. Its log: `journalctl -u soro-idle`.
 
-Then let the gateway start the server. In the AWS console:
+It needs `aws --version` to work on the server (if not: `sudo snap install aws-cli --classic`), and permission to stop itself and nothing else. In the AWS console, with your account id and the instance id:
 
-1. **IAM → Policies → Create policy**, JSON, with your account id and the instance id:
+1. **IAM → Policies → Create policy**, JSON, named `soro-stop-engine`:
    ```json
    {
      "Version": "2012-10-17",
-     "Statement": [{ "Effect": "Allow", "Action": "ec2:StartInstances", "Resource": "arn:aws:ec2:eu-central-1:<account-id>:instance/<instance-id>" }]
+     "Statement": [{ "Effect": "Allow", "Action": "ec2:StopInstances", "Resource": "arn:aws:ec2:us-east-1:<account-id>:instance/<instance-id>" }]
    }
    ```
-   Name it `soro-start-engine`.
+2. **IAM → Roles → Create role**: trusted entity *AWS service*, use case **EC2**, attach `soro-stop-engine`, name it `soro-engine`. Then EC2 → the instance → Actions → Security → **Modify IAM role** → `soro-engine`.
+
+Then let the gateway start the server:
+
+1. **IAM → Policies → Create policy**, named `soro-start-engine`: the same JSON with `ec2:StartInstances` instead of `ec2:StopInstances`.
 2. **IAM → Users → Create user** `soro-gateway` (no console access), attach `soro-start-engine`, then **Security credentials → Create access key** (*Application running outside AWS*). Keep the key id and secret for Render.
 
 ## 6. Point the gateway at it
@@ -105,7 +110,7 @@ In Render → Environment, then redeploy:
 
 - `ENGINE_URL=https://engine.soro.charavol.com`
 - `ENGINE_FALLBACK_URL=` the Modal URL
-- `ENGINE_AWS_INSTANCE_ID=` the instance id (`i-…`), with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the `soro-gateway` user
+- `ENGINE_AWS_INSTANCE_ID=` the instance id (`i-…`), with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the `soro-gateway` user (`ENGINE_AWS_REGION` defaults to `us-east-1`)
 
 In the gateway's logs, `engine asleep, starting it and using the fallback` is a wake-up, and `engine failed, using the fallback` means the server was up but errored or timed out.
 

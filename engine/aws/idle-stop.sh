@@ -16,14 +16,22 @@ case "$stay" in
   [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) [[ "$(date -u +%F)" > "$stay" ]] || exit 0 ;;
 esac
 
+# Through the EC2 API, with the instance's role, not `shutdown`: a Spot instance shut down from inside may be
+# terminated instead of stopped.
+stop_server() {
+  echo "$1: stopping the server"
+  local id region
+  id=$(curl -fsS --max-time 2 -H "X-aws-ec2-metadata-token: $imds_token" "$imds/meta-data/instance-id")
+  region=$(curl -fsS --max-time 2 -H "X-aws-ec2-metadata-token: $imds_token" "$imds/meta-data/placement/region")
+  aws ec2 stop-instances --region "$region" --instance-ids "$id" --output text >/dev/null
+}
+
 up_s=$(cut -d. -f1 /proc/uptime)
 if idle_s=$(curl -fsS --max-time 5 http://127.0.0.1:8000/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["idle_s"])'); then
   if [ "$idle_s" -ge $((IDLE_MINUTES * 60)) ]; then
-    echo "engine idle for ${idle_s}s: stopping the server"
-    shutdown -h now
+    stop_server "engine idle for ${idle_s}s"
   fi
 elif [ "$up_s" -ge 1800 ]; then
   # Up half an hour and the engine still isn't answering: stop rather than pay for a broken server.
-  echo "engine not answering after ${up_s}s up: stopping the server"
-  shutdown -h now
+  stop_server "engine not answering after ${up_s}s up"
 fi
