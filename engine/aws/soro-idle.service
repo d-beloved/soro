@@ -1,0 +1,8 @@
+[Unit]
+Description=Stop the server when the Soro engine is idle (see engine/aws/README.md)
+
+[Service]
+Type=oneshot
+# Must be at least 10: the gateway checks on the engine after 5 quiet minutes, and assumes it is still up before that.
+Environment=IDLE_MINUTES=15
+ExecStart=/bin/bash /home/ubuntu/soro/engine/aws/idle-stop.sh

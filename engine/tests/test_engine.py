@@ -91,6 +91,18 @@ def test_health_is_public(client):
     assert client.get("/health").json()["ok"] is True
 
 
+def test_idle_counts_only_the_gateways_calls():
+    clock = [1000.0]
+    c = TestClient(create_api(FakeEngine(), TOKEN, clock=lambda: clock[0]))
+    clock[0] += 600
+    assert c.get("/health").json()["idle_s"] == 600  # counted from startup
+    c.post("/route", json={"text": "x", "lang": "en", "today": "2026-10-16"}, headers={"Authorization": "Bearer nope"})
+    assert c.get("/health").json()["idle_s"] == 600  # a refused call doesn't count
+    c.post("/route", json={"text": "x", "lang": "en", "today": "2026-10-16"}, headers=AUTH)
+    clock[0] += 30
+    assert c.get("/health").json()["idle_s"] == 30
+
+
 def test_auth_required(client):
     assert client.post("/route", json={"text": "x", "lang": "en", "today": "2026-10-07"}).status_code == 401
     bad = {"Authorization": "Bearer nope"}

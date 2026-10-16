@@ -1,18 +1,18 @@
 # Engine on AWS
 
-One always-on GPU server running the engine, with the Modal deployment kept as the gateway's fallback. Modal still scales to zero, so it costs nothing until AWS fails.
+One GPU server running the engine. It stops itself after 15 idle minutes and the gateway starts it again when a message comes in. Modal answers while it boots, and whenever it fails.
 
 ```
 Render gateway ──▶ https://engine.soro.charavol.com  (EC2 g4dn.xlarge, T4: Caddy ─▶ engine container)
-               └─▶ Modal (fallback: used when AWS errors or times out, scales to zero)
+     │         └─▶ Modal (fallback: while AWS is asleep or booting, or when it errors or times out)
+     └─ wakes the server (ec2:StartInstances) when it finds it asleep
 ```
 
 Region is eu-central-1 (Frankfurt), next to Render and Supabase and as the privacy notice says.
 
-## Before you start (AWS console)
+## Before you start
 
-1. **GPU quota.** New accounts can't run any GPU instance. In the **eu-central-1** region, go to Service Quotas → Amazon EC2 → *Running On-Demand G and VT instances* and request **8** (vCPUs). Approval takes anywhere from a few hours to a couple of days.
-2. **Budget alert.** Under Billing → Budgets, create a monthly cost budget with an email alert.
+In eu-central-1, request a quota increase for *Running On-Demand G and VT instances* (Service Quotas → Amazon EC2) to **4** vCPUs, one g4dn.xlarge. New accounts start at 0. Set a budget alert under Billing → Budgets.
 
 ## 1. Launch the server
 
@@ -23,6 +23,8 @@ EC2 → Launch instance, region **eu-central-1**:
 - **Storage:** 150 GB gp3 root volume. The image is about 20 GB and the models about 30 GB.
 - **Key pair:** create one and keep the `.pem`.
 - **Security group:** SSH (22) from *My IP* only; HTTP (80) and HTTPS (443) from anywhere. Caddy needs 80 open to get its certificate.
+- **Advanced details → Shutdown behavior:** **Stop** (the default). Never *Terminate*: the server shuts itself down when idle, and terminate would delete it.
+- **Advanced details → Allow tags in metadata:** **Enable**, for the `stay-awake` tag (step 5). On a running instance: Actions → Instance settings → Allow tags in instance metadata.
 
 Then EC2 → Elastic IPs → Allocate, and associate it with the instance, so the address survives stop and start.
 
@@ -72,20 +74,43 @@ curl -s -X POST https://engine.soro.charavol.com/route \
   -d '{"text":"I sell 3 bags of rice 75k","lang":"en","today":"2026-10-14"}'
 ```
 
-Both containers restart by themselves after a crash or a reboot.
+Both containers restart by themselves after a crash, a reboot, or a stop and start.
 
-## 5. Point the gateway at it
+## 5. Let it sleep when idle
 
-1. In Supabase, run `supabase/migrations/0008_pending_nudges.sql` first, so the gateway's reminders have a table to write to.
-2. In Render → Environment:
-   - `ENGINE_URL=https://engine.soro.charavol.com`
-   - `ENGINE_FALLBACK_URL=` the Modal URL (the current `ENGINE_URL`)
-   - `NUDGE_KEY=` the output of `openssl rand -base64 32`
-3. Deploy the gateway. In its logs, an `engine failed, using the fallback` line means AWS didn't answer and Modal served the message.
-4. Deploy the site (the privacy notice now lists AWS).
+On the server, install the timer that runs [idle-stop.sh](idle-stop.sh) every minute:
+
+```bash
+sudo cp ~/soro/engine/aws/soro-idle.service ~/soro/engine/aws/soro-idle.timer /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now soro-idle.timer
+```
+
+It stops the server once the engine has gone 15 minutes without a request from the gateway (`idle_s` in `/health`), or when the engine still isn't answering 30 minutes after boot, so a broken server doesn't run up a bill. It leaves the server on while anyone is logged in over SSH, and while the instance has a `stay-awake` tag (see Day to day). To change the 15 minutes, edit `IDLE_MINUTES` in `soro-idle.service` (at least 10), copy it again and run `sudo systemctl daemon-reload`. Its log: `journalctl -u soro-idle`.
+
+Then let the gateway start the server. In the AWS console:
+
+1. **IAM → Policies → Create policy**, JSON, with your account id and the instance id:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{ "Effect": "Allow", "Action": "ec2:StartInstances", "Resource": "arn:aws:ec2:eu-central-1:<account-id>:instance/<instance-id>" }]
+   }
+   ```
+   Name it `soro-start-engine`.
+2. **IAM → Users → Create user** `soro-gateway` (no console access), attach `soro-start-engine`, then **Security credentials → Create access key** (*Application running outside AWS*). Keep the key id and secret for Render.
+
+## 6. Point the gateway at it
+
+In Render → Environment, then redeploy:
+
+- `ENGINE_URL=https://engine.soro.charavol.com`
+- `ENGINE_FALLBACK_URL=` the Modal URL
+- `ENGINE_AWS_INSTANCE_ID=` the instance id (`i-…`), with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the `soro-gateway` user
+
+In the gateway's logs, `engine asleep, starting it and using the fallback` is a wake-up, and `engine failed, using the fallback` means the server was up but errored or timed out.
 
 ## Day to day
 
-- **Update the engine:** `cd ~/soro && git pull && cd engine/aws && docker compose up -d --build engine`. Messages fall back to Modal while it restarts.
-- **Pause it:** EC2 → Stop instance. The disk is kept and the gateway uses Modal in the meantime. Start it again whenever you like: the Elastic IP and the models stay where they are.
-- **Leave AWS:** stop or terminate the instance, then set `ENGINE_URL` back to the Modal URL and clear `ENGINE_FALLBACK_URL` on Render.
+- **Update the engine:** `cd ~/soro && git pull && cd engine/aws && docker compose up -d --build engine`, while logged in over SSH so the server doesn't stop itself mid-build. Messages fall back to Modal while it restarts. If `soro-idle.service` changed, copy it again and run `sudo systemctl daemon-reload`.
+- **Keep it up:** EC2 → the instance → Tags → Manage tags → add `stay-awake` with `on`, or a date (`2026-12-31`) to stay up through that day (UTC). Remove the tag, or let the date pass, and it sleeps after 15 idle minutes again. If it is asleep when you add the tag, start it (Instance state → Start) or send a message.
+- **Keep it off:** clear `ENGINE_AWS_INSTANCE_ID` on Render (or the next message starts it), then stop the instance.

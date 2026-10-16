@@ -92,8 +92,8 @@ node scripts/serve_site.mjs       # http://localhost:4321
    uv run --with modal modal deploy modal_app.py
    ```
    The deploy prints the engine URL. Containers scale to zero after 5 idle minutes, so the first message after a quiet spell waits for a cold start (about 45s). `modal run modal_app.py::warm --on` keeps one up until the next deploy, e.g. for a demo; `--no-on` lets it sleep again.
-   **Engine on AWS** (main, always on): follow [engine/aws/README.md](engine/aws/README.md).
-3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (`ENGINE_URL` set to the AWS engine and `ENGINE_FALLBACK_URL` to the Modal URL, or `ENGINE_URL` to Modal alone; `NUDGE_KEY` from `openssl rand -base64 32`; and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
+   **Engine on AWS** (main; stops itself when idle and the gateway wakes it, with Modal answering meanwhile): follow [engine/aws/README.md](engine/aws/README.md).
+3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (`ENGINE_URL` set to the AWS engine, `ENGINE_FALLBACK_URL` to the Modal URL, and `ENGINE_AWS_INSTANCE_ID` with the AWS keys so the gateway can wake it; or `ENGINE_URL` to Modal alone; `NUDGE_KEY` from `openssl rand -base64 32`; and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
 4. **Meta webhook:** set the callback URL to `https://<your-gateway>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
 5. **Site on Cloudflare Pages:** `npx wrangler pages deploy site --project-name <your-project> --branch main`.
 

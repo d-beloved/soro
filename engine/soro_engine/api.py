@@ -39,14 +39,18 @@ class SpeakIn(BaseModel):
 MAX_AUDIO_BYTES = 16 * 1024 * 1024  # WhatsApp's own audio limit
 
 
-def create_api(engine: SoroEngine, token: str) -> FastAPI:
+def create_api(engine: SoroEngine, token: str, clock=time.monotonic) -> FastAPI:
     if len(token) < 16:
         raise ValueError("ENGINE_TOKEN must be at least 16 characters")
     app = FastAPI(title="SoroEngine engine", docs_url=None, redoc_url=None)
+    # When the gateway last used the engine (not /health, which anyone can call). On AWS the server stops itself
+    # once this is old enough (aws/idle-stop.sh). Counted from startup, so a server woken for nothing sleeps again.
+    last_used = [clock()]
 
     def auth(authorization: str = Header(default="")) -> None:
         if not hmac.compare_digest(authorization, f"Bearer {token}"):
             raise HTTPException(status_code=401, detail="unauthorized")
+        last_used[0] = clock()
 
     @app.middleware("http")
     async def timing(request: Request, call_next):
@@ -57,7 +61,7 @@ def create_api(engine: SoroEngine, token: str) -> FastAPI:
 
     @app.get("/health")
     def health() -> dict:
-        return {"ok": True, **engine.status()}
+        return {"ok": True, "idle_s": int(clock() - last_used[0]), **engine.status()}
 
     @app.post("/transcribe", dependencies=[Depends(auth)])
     async def transcribe(request: Request, lang: Lang = Query("en"), detect: bool = Query(False)) -> dict:

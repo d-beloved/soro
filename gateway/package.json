@@ -17,6 +17,7 @@
     "review:corrections": "tsx --env-file=.env src/scripts/reviewCorrections.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "^3.1152.0",
     "@hono/node-server": "^2.1.3",
     "@supabase/supabase-js": "^2.117.2",
     "hono": "^4.13.13",

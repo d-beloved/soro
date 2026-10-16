@@ -34,6 +34,11 @@ interface Options {
   fallbackUrl?: string;
   /** After baseUrl fails, how long everything goes straight to the fallback before baseUrl is tried again. */
   cooldownMs?: number;
+  /**
+   * Starts baseUrl's server, for one that stops itself when idle (engine/aws/idle-stop.sh). With it, baseUrl is
+   * checked quickly before use after a quiet spell, and started when it doesn't answer. Must not throw.
+   */
+  wake?: () => Promise<void>;
   log?: { warn(obj: object, msg: string): void };
   fetch?: typeof fetch;
   now?: () => number;
@@ -49,6 +54,10 @@ export class EngineError extends Error {
 }
 
 const COLD_START_MS = 120_000;
+/** Unused this long, a server with `wake` may have stopped itself (it waits at least 10 idle minutes). */
+const CHECK_AFTER_MS = 5 * 60_000;
+/** A stopped server doesn't refuse the connection, it just never answers: don't wait long. */
+const CHECK_TIMEOUT_MS = 3_000;
 
 export function createEngineClient(opts: Options): EngineApi {
   const f = opts.fetch ?? fetch;
@@ -58,6 +67,16 @@ export function createEngineClient(opts: Options): EngineApi {
   const fallback = opts.fallbackUrl ? { base: opts.fallbackUrl.replace(/\/$/, ""), timeoutMs: COLD_START_MS } : null;
   const cooldownMs = opts.cooldownMs ?? 2 * 60_000;
   let primaryDownUntil = 0;
+  let primaryUsedAt = -Infinity;
+
+  async function primaryAwake(): Promise<boolean> {
+    if (!opts.wake || now() - primaryUsedAt < CHECK_AFTER_MS) return true;
+    try {
+      return (await f(`${primary.base}/health`, { signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) })).ok;
+    } catch {
+      return false;
+    }
+  }
 
   async function call(target: { base: string; timeoutMs: number }, path: string, body: BodyInit, contentType: string): Promise<Response> {
     const res = await f(`${target.base}${path}`, {
@@ -73,14 +92,22 @@ export function createEngineClient(opts: Options): EngineApi {
   async function post(path: string, body: BodyInit, contentType: string): Promise<Response> {
     if (!fallback) return call(primary, path, body, contentType);
     if (now() >= primaryDownUntil) {
-      try {
-        return await call(primary, path, body, contentType);
-      } catch (err) {
-        // A 4xx is about the request itself (bad audio, bad token): the fallback would refuse it too.
-        if (err instanceof EngineError && err.status !== undefined && err.status < 500) throw err;
-        primaryDownUntil = now() + cooldownMs;
-        opts.log?.warn({ err, path }, "engine failed, using the fallback");
+      const sentAt = now();
+      if (await primaryAwake()) {
+        try {
+          const res = await call(primary, path, body, contentType);
+          primaryUsedAt = sentAt; // the engine counts its idle time from when the request arrived
+          return res;
+        } catch (err) {
+          // A 4xx is about the request itself (bad audio, bad token): the fallback would refuse it too.
+          if (err instanceof EngineError && err.status !== undefined && err.status < 500) throw err;
+          opts.log?.warn({ err, path }, "engine failed, using the fallback");
+        }
+      } else {
+        opts.log?.warn({ path }, "engine asleep, starting it and using the fallback");
       }
+      primaryDownUntil = now() + cooldownMs;
+      void opts.wake?.();
     }
     return call(fallback, path, body, contentType);
   }

@@ -19,6 +19,10 @@ const Env = z.object({
   ENGINE_FALLBACK_URL: optional(z.string().url()),
   // How long to wait for ENGINE_URL before trying the fallback. Without a fallback this covers a Modal cold start.
   ENGINE_TIMEOUT_MS: optional(z.coerce.number().int().positive()),
+  // The AWS engine's EC2 instance: it stops itself when idle, and the gateway starts it again (needs a fallback,
+  // which answers meanwhile). Also set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY; see engine/aws/README.md.
+  ENGINE_AWS_INSTANCE_ID: optional(z.string().regex(/^i-[0-9a-f]+$/)),
+  ENGINE_AWS_REGION: z.string().default("eu-central-1"),
 
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),

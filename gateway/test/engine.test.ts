@@ -63,3 +63,70 @@ describe("engine client fallback", () => {
     expect(hits).toEqual([AWS]);
   });
 });
+
+describe("engine client with a server that sleeps when idle", () => {
+  function setup(answers: Record<string, number | "down">) {
+    let clock = 0;
+    let wakes = 0;
+    const calls: string[] = [];
+    const f = (async (url: string) => {
+      const u = new URL(url);
+      calls.push(`${u.origin === AWS ? "aws" : "modal"}${u.pathname}`);
+      const a = answers[u.origin];
+      if (a === "down") throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ intent: { intent: "unknown" }, text: "ok" }), { status: a ?? 200 });
+    }) as unknown as typeof fetch;
+    const e = createEngineClient({
+      baseUrl: AWS,
+      token: "t".repeat(16),
+      fallbackUrl: MODAL,
+      fetch: f,
+      now: () => clock,
+      cooldownMs: 120_000,
+      wake: async () => void wakes++,
+    });
+    return { e, calls, wakes: () => wakes, at: (ms: number) => (clock = ms) };
+  }
+
+  it("checks a quiet server before using it, and only after a quiet spell", async () => {
+    const s = setup({});
+    await s.e.route("hi", "en", "2026-10-16");
+    expect(s.calls).toEqual(["aws/health", "aws/route"]);
+    s.at(4 * 60_000);
+    await s.e.route("hi", "en", "2026-10-16");
+    expect(s.calls.slice(2)).toEqual(["aws/route"]);
+    s.at(10 * 60_000);
+    await s.e.route("hi", "en", "2026-10-16");
+    expect(s.calls.slice(3)).toEqual(["aws/health", "aws/route"]);
+    expect(s.wakes()).toBe(0);
+  });
+
+  it("wakes a stopped server and answers from the fallback until it is up", async () => {
+    const answers: Record<string, number | "down"> = { [AWS]: "down" };
+    const s = setup(answers);
+    await s.e.route("hi", "en", "2026-10-16");
+    expect(s.calls).toEqual(["aws/health", "modal/route"]); // no waiting on the main route
+    expect(s.wakes()).toBe(1);
+
+    s.at(60_000); // still booting, inside the cooldown
+    await s.e.route("hi", "en", "2026-10-16");
+    expect(s.calls.slice(2)).toEqual(["modal/route"]);
+
+    s.at(120_000); // after the cooldown: looks again, asks again
+    await s.e.route("hi", "en", "2026-10-16");
+    expect(s.calls.slice(3)).toEqual(["aws/health", "modal/route"]);
+    expect(s.wakes()).toBe(2);
+
+    delete answers[AWS]; // up
+    s.at(240_000);
+    await s.e.route("hi", "en", "2026-10-16");
+    expect(s.calls.slice(5)).toEqual(["aws/health", "aws/route"]);
+  });
+
+  it("wakes it after a failed call too", async () => {
+    const s = setup({ [AWS]: 503 });
+    await s.e.route("hi", "en", "2026-10-16");
+    expect(s.calls).toEqual(["aws/health", "modal/route"]);
+    expect(s.wakes()).toBe(1);
+  });
+});

@@ -16,9 +16,9 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    # Not published: only Caddy reaches it.
-    expose:
-      - "8000"
+    # Published on the server's loopback only, for idle-stop.sh. From outside, only Caddy reaches it.
+    ports:
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 30s
