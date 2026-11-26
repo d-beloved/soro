@@ -49,9 +49,14 @@ This gives the same files Modal serves, so the voices are exactly the same as be
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh && source ~/.local/bin/env
 uvx modal token new                                  # prints a link: open it on your laptop to approve
-uvx modal volume get soro-models / /opt/soro/models
+uvx modal run pack_models.py                         # packs the volume into one tar, on a "soro-transfer" volume
+uvx modal volume get soro-transfer models.tar /opt/soro/models/models.tar
+tar -xf /opt/soro/models/models.tar -C /opt/soro/models && rm /opt/soro/models/models.tar
+uvx modal volume delete soro-transfer --yes
 ls /opt/soro/models                                  # n-atlas-q4_k_m.gguf  hf/  voices/
 ```
+
+Don't copy the volume with `modal volume get soro-models /` directly: it drops the symlinks inside the Hugging Face cache, and the speech models then fail to load.
 
 ### Or build them from scratch
 
