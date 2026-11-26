@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from .amounts import extract_amount_ngn
 from .audio import ASR_SAMPLE_RATE, decode_to_16k, encode_voice_note
-from .config import LLM_GGUF, Lang
+from .config import LLM_PROFILE, Lang
 from .text import naira_sign
 
 log = logging.getLogger("soro_engine")
@@ -42,9 +42,9 @@ class SoroEngine:
         device = pick_device()
         t0 = time.time()
         if self.parts.llm:
-            from .llm import LLM
+            from .llm import LLM, LlamaCppChat
 
-            self.llm = LLM(LLM_GGUF)
+            self.llm = LLM(LlamaCppChat(LLM_PROFILE))
             log.info("LLM loaded (%.1fs)", time.time() - t0)
         if self.parts.asr:
             from .asr import ASR

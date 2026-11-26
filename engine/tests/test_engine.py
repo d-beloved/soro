@@ -55,6 +55,40 @@ def test_router_prompt_and_schema():
                 assert v in props[k]["enum"]
 
 
+class FakeChat:
+    """Any ChatModel: answers the router with a fixed JSON reply."""
+
+    def __init__(self, reply: str):
+        self.reply, self.calls = reply, []
+
+    def chat(self, messages, schema=None, max_tokens=256):
+        self.calls.append((messages, schema))
+        return self.reply
+
+
+def test_router_runs_on_any_chat_model():
+    from soro_engine.llm import LLM
+
+    chat = FakeChat('{"intent": "log_sale", "item": "rice", "amount_ngn": 5}')
+    out = LLM(chat).route("I sell rice 5k", "en", "2026-10-07")
+    assert out["intent"] == "log_sale" and out["amount_ngn"] == 5000  # the amount parser still checks the model
+    messages, schema = chat.calls[0]
+    assert schema is prompts.ROUTER_SCHEMA and messages[-1]["content"] == "[English] I sell rice 5k"
+    assert LLM(FakeChat("not json")).route("hi", "en", "2026-10-07") == {"intent": "unknown"}
+
+
+def test_route_messages_can_leave_examples_out():
+    one = prompts.FEW_SHOT[:1]
+    assert len(prompts.route_messages("x", "en", "2026-10-07", one)) == 1 + 2 + 1
+
+
+def test_thinking_is_stripped():
+    from soro_engine.llm import _THINKING
+
+    assert _THINKING.sub("", "<think>\nhmm\n</think>\n\nBawo ni") == "Bawo ni"
+    assert _THINKING.sub("", "Bawo ni") == "Bawo ni"
+
+
 def test_placeholders():
     assert placeholders("Sale {what}{amount}, today {today_total}") == ["{amount}", "{today_total}", "{what}"]
 

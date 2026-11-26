@@ -15,6 +15,7 @@ import json
 import re
 import sys
 import unicodedata
+from dataclasses import replace
 from pathlib import Path
 
 import modal
@@ -51,11 +52,12 @@ def verify(items: list[dict]) -> dict:
 
     from soro_engine.asr import ASR
     from soro_engine.audio import decode_to_16k, encode_voice_note
-    from soro_engine.llm import LLM
+    from soro_engine.config import LLM_PROFILES
+    from soro_engine.llm import LLM, LlamaCppChat
     from soro_engine.tts import TTS
 
     t0 = time.time()
-    llm = LLM(Path("/prod/n-atlas-q4_k_m.gguf"))
+    llm = LLM(LlamaCppChat(replace(LLM_PROFILES["n-atlas"], gguf=Path("/prod/n-atlas-q4_k_m.gguf"))))
     asr = ASR("cuda")
     tts = TTS("cuda")
     loaded = time.time() - t0

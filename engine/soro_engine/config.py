@@ -4,6 +4,7 @@ accept the terms on each model page with the account whose HF_TOKEN you use."""
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -29,8 +30,25 @@ LLM_COMMUNITY_GGUF = ("QuantFactory/N-ATLaS-GGUF", "N-ATLaS.Q4_K_M.gguf")
 # The router prompt is ~3.4k tokens of instructions and examples; a long voice note heard twice (see
 # SoroEngine.transcribe) can add 1k more. Each extra 1k tokens of context costs ~128 MB of GPU memory.
 LLM_CTX = 6144
-LLM_TEMPERATURE = 0.1  # model card recommendation
-LLM_REPEAT_PENALTY = 1.12  # model card recommendation
+
+
+@dataclass(frozen=True)
+class LLMProfile:
+    """A GGUF and how to run it. chat_format None: use the chat template stored in the GGUF."""
+
+    gguf: Path
+    chat_format: str | None
+    temperature: float
+    repeat_penalty: float
+
+
+# SORO_LLM picks one; the router, prompts and schema are the same for all of them (scripts/eval_router.py).
+LLM_PROFILES: dict[str, LLMProfile] = {
+    "n-atlas": LLMProfile(LLM_GGUF, "llama-3", temperature=0.1, repeat_penalty=1.12),  # model card recommendation
+    # Qwen/Qwen3-8B-GGUF (Apache-2.0). No repeat penalty: it penalises the JSON's own repeated quotes and keys.
+    "qwen3-8b": LLMProfile(MODELS_DIR / "Qwen3-8B-Q4_K_M.gguf", None, temperature=0.1, repeat_penalty=1.0),
+}
+LLM_PROFILE = LLM_PROFILES[os.environ.get("SORO_LLM", "n-atlas")]
 
 # --- TTS: OmniVoice (Apache-2.0), 24 kHz output. The base model for English, Hausa and Igbo; a Yoruba fine-tune of
 # it for Yoruba, whose tones the base model flattens. Round-trip WER in the Oct 2026 listening test (spoken, then

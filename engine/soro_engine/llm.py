@@ -1,44 +1,71 @@
-"""N-ATLaS via llama.cpp (CUDA on Modal, Metal on Apple Silicon)."""
+"""The language model's jobs (routing, tutoring, translating) on any chat model; llama.cpp is the one backend so far
+(CUDA in the container and on Modal, Metal on Apple Silicon)."""
 
 from __future__ import annotations
 
 import json
+import re
 import threading
-from pathlib import Path
+from typing import Protocol
 
 from . import prompts
 from .amounts import reconcile_amount
-from .config import LLM_CTX, LLM_REPEAT_PENALTY, LLM_TEMPERATURE, Lang
+from .config import LLM_CTX, Lang, LLMProfile
 
 
-class LLM:
-    def __init__(self, gguf_path: Path, n_gpu_layers: int = -1, n_ctx: int = LLM_CTX):
+class ChatModel(Protocol):
+    def chat(self, messages: list[dict], schema: dict | None = None, max_tokens: int = 256) -> str:
+        """The reply's text. With a schema, the backend must constrain the reply to it, not just ask for it."""
+        ...
+
+
+# Qwen3 and other reasoning models may think out loud first. With a schema, the grammar already rules it out.
+_THINKING = re.compile(r"^\s*<think>.*?</think>\s*", re.S)
+
+
+class LlamaCppChat:
+    """Any GGUF through llama.cpp, with JSON schemas enforced by its grammar."""
+
+    def __init__(self, profile: LLMProfile, n_gpu_layers: int = -1, n_ctx: int = LLM_CTX):
         from llama_cpp import Llama
 
-        if not gguf_path.exists():
-            raise FileNotFoundError(f"{gguf_path} missing: run setup_models first")
+        if not profile.gguf.exists():
+            raise FileNotFoundError(f"{profile.gguf} missing: run setup_models first")
         self._llm = Llama(
-            model_path=str(gguf_path),
+            model_path=str(profile.gguf),
             n_gpu_layers=n_gpu_layers,
             n_ctx=n_ctx,
-            chat_format="llama-3",
+            chat_format=profile.chat_format,
             verbose=False,
         )
+        self._profile = profile
         self._lock = threading.Lock()  # a llama.cpp context is not thread-safe
 
     def chat(self, messages: list[dict], schema: dict | None = None, max_tokens: int = 256) -> str:
-        kwargs: dict = dict(temperature=LLM_TEMPERATURE, repeat_penalty=LLM_REPEAT_PENALTY, max_tokens=max_tokens)
+        p = self._profile
+        kwargs: dict = dict(temperature=p.temperature, repeat_penalty=p.repeat_penalty, max_tokens=max_tokens)
         if schema is not None:
             kwargs["response_format"] = {"type": "json_object", "schema": schema}
         with self._lock:
             out = self._llm.create_chat_completion(messages=messages, **kwargs)
-        return (out["choices"][0]["message"]["content"] or "").strip()
+        return _THINKING.sub("", out["choices"][0]["message"]["content"] or "").strip()
+
+
+class LLM:
+    def __init__(self, model: ChatModel):
+        self.model = model
+
+    def chat(self, messages: list[dict], schema: dict | None = None, max_tokens: int = 256) -> str:
+        return self.model.chat(messages, schema, max_tokens)
 
     def route(self, text: str, lang: Lang, today: str, en_text: str | None = None) -> dict:
         """`en_text`: the English model's hearing of a yo/ha/ig voice note, see SoroEngine.transcribe."""
         text = prompts.router_input(text, en_text)
-        messages = prompts.route_messages(text, lang, today)
-        raw = self.chat(messages, schema=prompts.ROUTER_SCHEMA, max_tokens=200)
+        raw = self.chat(prompts.route_messages(text, lang, today), schema=prompts.ROUTER_SCHEMA, max_tokens=200)
+        return self.finish_route(raw, text)
+
+    def finish_route(self, raw: str, text: str) -> dict:
+        """The model's router JSON, checked and completed: `text` as router_input() built it."""
         try:
             result = json.loads(raw)
         except json.JSONDecodeError:

@@ -60,7 +60,7 @@ To receive real WhatsApp messages locally, expose port 3000 (for example `cloudf
 ```bash
 cd engine
 uv sync                           # light deps, enough for tests
-uv run pytest                     # 48 tests
+uv run pytest
 ```
 
 To run the models locally (on an Apple Silicon Mac, ASR and the LLM work; TTS is CPU-only and slow, so set `VOICE_REPLIES=off` in the gateway):
@@ -73,6 +73,8 @@ ENGINE_TOKEN=dev-token-change-me-123 uv run --extra ml python serve_local.py --n
 ```
 
 `setup_models` converts the official N-ATLaS weights to GGUF itself. If llama.cpp refuses the tokenizer, `--allow-community-gguf` falls back to the QuantFactory build.
+
+The LLM is a profile: `SORO_LLM=qwen3-8b` runs the same router, prompts and schema on Qwen3-8B (Apache-2.0) instead of N-ATLaS, from `engine/models/Qwen3-8B-Q4_K_M.gguf` ([Qwen/Qwen3-8B-GGUF](https://huggingface.co/Qwen/Qwen3-8B-GGUF)). See `LLM_PROFILES` in `soro_engine/config.py`.
 
 ### Site
 
@@ -104,6 +106,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
 | `npm run export:csv` (gateway)                                    | Writes the interaction log to `exports/interactions_<date>.csv`          |
 | `npm run tips:sync` (gateway)                                     | Uploads `supabase/seed/tip_translations.json` to Supabase                |
 | `uv run --extra ml python scripts/eval_asr.py` (engine)           | ASR word error rate from `engine/eval/<lang>/transcripts.csv`            |
+| `uv run --no-project --with modal modal run scripts/eval_router_modal.py` (engine) | Router accuracy per LLM profile, leave-one-out on its labelled examples ([results](docs/ROUTER_MODELS.md)) |
 | `uv run --with qrcode python scripts/set_whatsapp_number.py 234…` | Puts the WhatsApp number and QR into the site                            |
 
 Yoruba, Hausa and Igbo strings and tips are hand-translated from the English. A native speaker must review them before they are marked `reviewed`.
@@ -114,4 +117,4 @@ Yoruba, Hausa and Igbo strings and tips are hand-translated from the English. A 
 - Speech recognition: NCAIR models on Hugging Face (`NCAIR1/NigerianAccentedEnglish`, `NCAIR1/Yoruba-ASR`, `NCAIR1/Hausa-ASR`, `NCAIR1/Igbo-ASR`).
 - Text-to-speech: [OmniVoice](https://huggingface.co/k2-fsa/OmniVoice) (Apache-2.0), and for Yoruba its fine-tune [Sam4rano/omnivoice-yoruba-tts](https://huggingface.co/Sam4rano/omnivoice-yoruba-tts) (Apache-2.0).
 
-© 2026 Charavol Technologies Ltd.
+The code in this repo is © 2026 Ayodeji Moronkeji David, licensed under the [Apache License 2.0](LICENSE). Charavol Technologies Ltd. runs Sọ̀rọ̀ on it under that licence. The licence covers the code only: each model above keeps its own licence, and N-ATLaS and the NCAIR models are not covered by it.

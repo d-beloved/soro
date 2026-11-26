@@ -1,4 +1,5 @@
-"""Prompts for N-ATLaS. Router output is constrained to ROUTER_SCHEMA by llama.cpp's JSON grammar.
+"""Prompts for the language model (N-ATLaS unless config.LLM_PROFILES says otherwise). Router output is
+constrained to ROUTER_SCHEMA by llama.cpp's JSON grammar.
 
 The yo/ha/ig few-shot examples are first drafts: have a native speaker check them
 and swap in real phrasings from users' voice notes.
@@ -308,10 +309,10 @@ def tagged(text: str, lang: Lang) -> str:
     return f"[{LANG_TAGS[lang]}] {text}"
 
 
-def route_messages(text: str, lang: Lang, today: str) -> list[dict]:
-    """`text` as router_input() builds it; `lang` is the user's chosen language."""
+def route_messages(text: str, lang: Lang, today: str, examples: list | None = None) -> list[dict]:
+    """`text` as router_input() builds it; `lang` is the user's chosen language. `examples`: FEW_SHOT by default."""
     messages = [{"role": "system", "content": ROUTER_SYSTEM.format(today=today)}]
-    for ex_lang, user, out in FEW_SHOT:
+    for ex_lang, user, out in FEW_SHOT if examples is None else examples:
         messages.append({"role": "user", "content": tagged(user, ex_lang)})
         messages.append({"role": "assistant", "content": json.dumps(out, ensure_ascii=False)})
     messages.append({"role": "user", "content": tagged(text, lang)})
