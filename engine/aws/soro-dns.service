@@ -1,0 +1,13 @@
+[Unit]
+Description=Point the Soro engine's DNS name at this server's address (see engine/aws/README.md)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/ubuntu/soro/engine/aws/update-dns.sh
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
