@@ -10,14 +10,16 @@ People send a voice note or text in English, Pidgin, Yoruba, Hausa or Igbo about
 
 ## How it fits together
 
+![How Sọ̀rọ̀ runs](docs/system.svg)
+
 ```
 WhatsApp user
    │  voice note / text
    ▼
-Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on Render)
-                                      │  consent, routing, commerce, tutor, replies
+Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on AWS Lambda: webhook → SQS FIFO → worker)
+                                      │  consent, routing, commerce, tutor, replies; reminders every minute
                                       ├──▶ Supabase Postgres (EU)        supabase/
-                                      └──▶ engine/  (FastAPI on an AWS T4 GPU, Modal as fallback)
+                                      └──▶ engine/  (FastAPI on an AWS T4 GPU that sleeps when idle, Modal as fallback)
                                              • ASR: NCAIR Nigerian-accented English, Yoruba, Hausa, Igbo (Whisper-small)
                                              • LLM: N-ATLaS (Llama-3 8B) as GGUF Q4_K_M via llama.cpp: intent routing, tip adaptation, translation
                                              • TTS: OmniVoice (Yoruba fine-tune for Yoruba) → Opus voice note
@@ -31,7 +33,7 @@ Landing page, privacy, terms ─────── site/  (static, Cloudflare Pa
 
 | Path                     | What                                                                                                                                                                                                                                                      |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gateway/`               | WhatsApp webhook service. `src/pipeline/handle.ts` is the message flow.                                                                                                                                                                                   |
+| `gateway/`               | WhatsApp webhook service. `src/pipeline/handle.ts` is the message flow, `src/lambda.ts` and `aws/` the Lambda deployment.                                                                                                                                                                                   |
 | `engine/`                | GPU model service. `soro_engine/api.py` holds the endpoints, `aws/` and `Dockerfile` the AWS deployment, `modal_app.py` the Modal one.                                                                                                                                                            |
 | `supabase/migrations/`   | Schema (`0001_init.sql`), the retention purge (`0002_retention.sql`), personal money, budgets and undo (`0003_personal_money.sql`), the gateway's table privileges (`0004_service_role_grants.sql`), the export view names (`0005_rename_views.sql`), anonymise-on-delete (`0006_anonymise_on_delete.sql`), the reminder (`0007_nudge.sql`) and pending reminders (`0008_pending_nudges.sql`). |
 | `supabase/seed/tips.sql` | The financial-literacy tip library.                                                                                                                                                                                                                       |
@@ -48,7 +50,7 @@ Requirements: Node 22, [uv](https://docs.astral.sh/uv/), ffmpeg (`brew install f
 cd gateway
 npm install
 cp .env.example .env      # fill it in
-npm test                  # 57 tests
+npm test
 npm run typecheck
 npm run dev               # http://localhost:3000
 ```
@@ -95,8 +97,8 @@ node scripts/serve_site.mjs       # http://localhost:4321
    ```
    The deploy prints the engine URL. Containers scale to zero after 5 idle minutes, so the first message after a quiet spell waits for a cold start (about 45s). `modal run modal_app.py::warm --on` keeps one up until the next deploy, e.g. for a demo; `--no-on` lets it sleep again.
    **Engine on AWS** (main; stops itself when idle and the gateway wakes it, with Modal answering meanwhile): follow [engine/aws/README.md](engine/aws/README.md).
-3. **Gateway on Render** (free web service): connect the GitHub repo, root directory `gateway`, build `npm ci && npm run build`, start `npm start`, health check path `/health`, region Frankfurt. Add every variable from `.env.example` (`ENGINE_URL` set to the AWS engine, `ENGINE_FALLBACK_URL` to the Modal URL, and `ENGINE_AWS_INSTANCE_ID` with the AWS keys so the gateway can wake it; or `ENGINE_URL` to Modal alone; `NUDGE_KEY` from `openssl rand -base64 32`; and `NODE_VERSION=22`); leave `PORT` to Render. Free services sleep after 15 idle minutes, so point an uptime monitor at `/health` every 5 minutes.
-4. **Meta webhook:** set the callback URL to `https://<your-gateway>/webhook`, use the same verify token as `WA_VERIFY_TOKEN`, and subscribe to `messages`.
+3. **Gateway on AWS Lambda**, with the Meta webhook pointed at it: follow [gateway/aws/README.md](gateway/aws/README.md). The settings are the variables in `gateway/.env.example` (`ENGINE_URL` set to the AWS engine and `ENGINE_FALLBACK_URL` to the Modal URL, or `ENGINE_URL` to Modal alone; `NUDGE_KEY` from `openssl rand -base64 32`).
+4. **Gateway elsewhere** (any Node 22 host): build with `npm ci && npm run build`, start with `npm start`, health check `/health`, the same variables as the environment, plus `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for a user allowed `ec2:StartInstances` on the engine if it should wake the AWS engine. Set the Meta callback URL to `https://<your-gateway>/webhook`, with `WA_VERIFY_TOKEN` as the verify token, subscribed to `messages`.
 5. **Site on Cloudflare Pages:** `npx wrangler pages deploy site --project-name <your-project> --branch main`.
 
 ## Scripts

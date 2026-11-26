@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 850" width="1200" height="850" font-family="Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <style>
+      .t{font-size:15px;font-weight:700;fill:#0f172a}
+      .s{font-size:12.5px;fill:#334155}
+      .h{font-size:12px;font-weight:700;letter-spacing:.06em;fill:#64748b}
+      .l{font-size:12px;fill:#475569}
+      .ln{stroke:#475569;stroke-width:1.8;fill:none}
+      .dash{stroke:#475569;stroke-width:1.6;fill:none;stroke-dasharray:6 5}
+    </style>
+  </defs>
+  <rect width="1200" height="850" fill="#ffffff"/>
+
+  <text x="40" y="44" font-size="24" font-weight="800" fill="#0f172a">How Sọ̀rọ̀ runs</text>
+  <text x="40" y="68" class="s">Nothing runs between messages except the database: the gateway is serverless, the GPU server stops itself when idle, and Modal scales to zero.</text>
+
+  <!-- Row 1: user and Meta -->
+  <rect x="40" y="100" width="190" height="86" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="135" y="134" class="t" text-anchor="middle">User on WhatsApp</text>
+  <text x="135" y="156" class="s" text-anchor="middle">voice note or text</text>
+  <text x="135" y="174" class="s" text-anchor="middle">any phone, no app</text>
+
+  <rect x="290" y="100" width="230" height="86" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="405" y="134" class="t" text-anchor="middle">Meta WhatsApp Cloud API</text>
+  <text x="405" y="156" class="s" text-anchor="middle">delivers messages and media</text>
+  <text x="405" y="174" class="s" text-anchor="middle">signs every webhook</text>
+
+  <path class="ln" d="M230,132 L288,132" marker-end="url(#a)"/>
+  <path class="ln" d="M288,158 L232,158" marker-end="url(#a)"/>
+
+  <!-- Gateway on Lambda -->
+  <rect x="40" y="240" width="1120" height="230" rx="14" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="60" y="268" class="t">Gateway · AWS Lambda (us-east-1) · Node 22 + Hono + TypeScript</text>
+  <text x="60" y="287" class="l">gateway/src/lambda.ts · gateway/aws/template.yaml · deployed with gateway/aws/deploy.sh</text>
+
+  <rect x="60" y="304" width="200" height="104" rx="10" fill="#ffffff" stroke="#3b82f6"/>
+  <text x="76" y="328" class="h">NUDGE</text>
+  <text x="76" y="350" class="s">EventBridge, every minute</text>
+  <text x="76" y="370" class="s">sends the reminders</text>
+  <text x="76" y="388" class="s">that are due</text>
+
+  <rect x="290" y="304" width="230" height="104" rx="10" fill="#ffffff" stroke="#3b82f6"/>
+  <text x="306" y="328" class="h">WEBHOOK</text>
+  <text x="306" y="350" class="s">function URL</text>
+  <text x="306" y="370" class="s">checks Meta's signature,</text>
+  <text x="306" y="388" class="s">queues the message, acks</text>
+
+  <rect x="560" y="304" width="200" height="104" rx="10" fill="#ffffff" stroke="#3b82f6"/>
+  <text x="576" y="328" class="h">SQS FIFO QUEUE</text>
+  <text x="576" y="350" class="s">one message at a time</text>
+  <text x="576" y="370" class="s">per sender, in order</text>
+  <text x="576" y="388" class="s">encrypted, kept 1 hour</text>
+
+  <rect x="800" y="304" width="340" height="104" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="2"/>
+  <text x="816" y="328" class="h">WORKER (the pipeline)</text>
+  <text x="816" y="350" class="s">consent, language, intent handlers, records,</text>
+  <text x="816" y="370" class="s">debts, stock, budgets, tips, replies</text>
+  <text x="816" y="388" class="s">starts the GPU server when it is asleep</text>
+
+  <path class="ln" d="M520,356 L558,356" marker-end="url(#a)"/>
+  <path class="ln" d="M760,356 L798,356" marker-end="url(#a)"/>
+
+  <text x="60" y="444" class="s">Settings and secrets: SSM SecureString <tspan font-weight="700">/soro/gateway</tspan>, re-read every 5 minutes  ·  Logs: CloudWatch <tspan font-weight="700">/soro/gateway</tspan>, kept 30 days</text>
+
+  <!-- Meta -> webhook, worker -> Meta -->
+  <path class="ln" d="M405,186 L405,302" marker-end="url(#a)"/>
+  <text x="414" y="222" class="l">webhook POST</text>
+  <path class="ln" d="M970,302 L970,143 L522,143" marker-end="url(#a)"/>
+  <text x="560" y="134" class="l">reply: text first, then a voice note (Graph API)</text>
+
+  <!-- Row 3 -->
+  <rect x="40" y="540" width="300" height="150" rx="12" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="190" y="572" class="t" text-anchor="middle">Supabase Postgres (EU)</text>
+  <text x="190" y="596" class="s" text-anchor="middle">users (phone = salted SHA-256)</text>
+  <text x="190" y="616" class="s" text-anchor="middle">records, debts, stock, budgets</text>
+  <text x="190" y="636" class="s" text-anchor="middle">message log, tips</text>
+  <text x="190" y="656" class="s" text-anchor="middle">pending reminders (number sealed)</text>
+
+  <rect x="380" y="540" width="480" height="210" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2.5"/>
+  <text x="400" y="570" class="t">AI engine · AWS EC2 g4dn.xlarge (T4 GPU)</text>
+  <text x="400" y="590" class="l">engine.soro.charavol.com · Caddy (HTTPS) → FastAPI container</text>
+  <text x="400" y="618" class="s"><tspan font-weight="700">Hear:</tspan> NCAIR ASR (English, Yorùbá, Hausa, Igbo)</text>
+  <text x="400" y="640" class="s"><tspan font-weight="700">Understand:</tspan> N-ATLaS 8B, GGUF Q4_K_M on llama.cpp</text>
+  <text x="400" y="662" class="s"><tspan font-weight="700">Speak:</tspan> OmniVoice, with a Yorùbá fine-tune</text>
+  <text x="400" y="690" class="s">Stops itself after 15 minutes without a request.</text>
+  <text x="400" y="710" class="s">The worker starts it again (ec2:StartInstances);</text>
+  <text x="400" y="730" class="s">Modal answers while it boots.</text>
+
+  <rect x="900" y="540" width="260" height="150" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="1030" y="572" class="t" text-anchor="middle">Fallback engine · Modal</text>
+  <text x="1030" y="596" class="s" text-anchor="middle">same container and models</text>
+  <text x="1030" y="616" class="s" text-anchor="middle">T4 GPU, scales to zero</text>
+  <text x="1030" y="636" class="s" text-anchor="middle">used while EC2 is asleep</text>
+  <text x="1030" y="656" class="s" text-anchor="middle">or booting, or when it fails</text>
+
+  <!-- gateway -> row 3 -->
+  <path class="ln" d="M190,470 L190,538" marker-end="url(#a)"/>
+  <text x="200" y="510" class="l">read / write</text>
+  <path class="ln" d="M620,470 L620,538" marker-end="url(#a)"/>
+  <text x="630" y="500" class="l">/transcribe /route /adapt /speak</text>
+  <text x="630" y="518" class="l">(bearer token)</text>
+  <path class="dash" d="M1030,470 L1030,538" marker-end="url(#a)"/>
+  <text x="1040" y="510" class="l">fallback</text>
+
+  <!-- Site -->
+  <rect x="40" y="780" width="1120" height="46" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="60" y="808" class="s"><tspan font-weight="700">Website</tspan> · Cloudflare Pages (soro.charavol.com): landing page, privacy notice, terms · site/</text>
+</svg>

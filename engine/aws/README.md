@@ -3,8 +3,8 @@
 One GPU server running the engine. It stops itself after 15 idle minutes and the gateway starts it again when a message comes in. Modal answers while it boots, and whenever it fails.
 
 ```
-Render gateway ──▶ https://engine.soro.charavol.com  (EC2 g4dn.xlarge, T4: Caddy ─▶ engine container)
-     │         └─▶ Modal (fallback: while AWS is asleep or booting, or when it errors or times out)
+gateway (Lambda) ──▶ https://engine.soro.charavol.com  (EC2 g4dn.xlarge, T4: Caddy ─▶ engine container)
+     │           └─▶ Modal (fallback: while AWS is asleep or booting, or when it errors or times out)
      └─ wakes the server (ec2:StartInstances) when it finds it asleep
 ```
 
@@ -70,7 +70,7 @@ docker compose run --rm -e HF_TOKEN=hf_xxx -e HF_HUB_OFFLINE=0 engine python -m 
 ## 4. Start it
 
 ```bash
-cp .env.example .env && nano .env      # ENGINE_TOKEN: the same value as on Render and in the Modal secret
+cp .env.example .env && nano .env      # ENGINE_TOKEN: the same value as in the gateway's settings and the Modal secret
 docker compose up -d --build            # the first build takes 20-30 min (llama.cpp compiles for CUDA)
 docker compose logs -f engine           # wait for "Uvicorn running on http://0.0.0.0:8000"
 curl https://engine.soro.charavol.com/health
@@ -92,24 +92,16 @@ sudo systemctl daemon-reload && sudo systemctl enable --now soro-idle.timer
 
 It shuts the server down (which stops it) once the engine has gone 15 minutes without a request from the gateway (`idle_s` in `/health`), or when the engine still isn't answering 30 minutes after boot, so a broken server doesn't run up a bill. It leaves the server on while anyone is logged in over SSH, and while the instance has a `stay-awake` tag (see Day to day). To change the 15 minutes, edit `IDLE_MINUTES` in `soro-idle.service` (at least 10), copy it again and run `sudo systemctl daemon-reload`. Its log: `journalctl -u soro-idle`.
 
-Let the gateway start the server again, with permission to do that and nothing else. In the AWS console, with your account id and the instance id:
-
-1. **IAM → Policies → Create policy**, JSON, named `soro-start-engine`:
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [{ "Effect": "Allow", "Action": "ec2:StartInstances", "Resource": "arn:aws:ec2:us-east-1:<account-id>:instance/<instance-id>" }]
-   }
-   ```
-2. **IAM → Users → Create user** `soro-gateway` (no console access), attach `soro-start-engine`, then **Security credentials → Create access key** (*Application running outside AWS*). Keep the key id and secret for Render.
-
 ## 6. Point the gateway at it
 
-In Render → Environment, then redeploy:
+On Lambda ([gateway/aws/README.md](../../gateway/aws/README.md)), set these in the `/soro/gateway` parameter:
 
 - `ENGINE_URL=https://engine.soro.charavol.com`
 - `ENGINE_FALLBACK_URL=` the Modal URL
-- `ENGINE_AWS_INSTANCE_ID=` the instance id (`i-…`), with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the `soro-gateway` user (`ENGINE_AWS_REGION` defaults to `us-east-1`)
+
+and deploy with the instance id (`gateway/aws/deploy.sh i-…`). The worker's own role is allowed to start this one server and nothing else, so there is no access key to create.
+
+If the gateway runs somewhere else, give it `ENGINE_AWS_INSTANCE_ID` too, and the key of an IAM user whose only permission is `ec2:StartInstances` on `arn:aws:ec2:us-east-1:<account-id>:instance/<instance-id>` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
 
 In the gateway's logs, `engine asleep, starting it and using the fallback` is a wake-up, and `engine failed, using the fallback` means the server was up but errored or timed out.
 
@@ -117,4 +109,4 @@ In the gateway's logs, `engine asleep, starting it and using the fallback` is a 
 
 - **Update the engine:** `cd ~/soro && git pull && cd engine/aws && docker compose up -d --build engine`, while logged in over SSH so the server doesn't stop itself mid-build. Messages fall back to Modal while it restarts. If `soro-idle.service` changed, copy it again and run `sudo systemctl daemon-reload`.
 - **Keep it up:** EC2 → the instance → Tags → Manage tags → add `stay-awake` with `on`, or a date (`2026-12-31`) to stay up through that day (UTC). Remove the tag, or let the date pass, and it sleeps after 15 idle minutes again. If it is asleep when you add the tag, start it (Instance state → Start) or send a message.
-- **Keep it off:** clear `ENGINE_AWS_INSTANCE_ID` on Render (or the next message starts it), then stop the instance.
+- **Keep it off:** in the `/soro/gateway` parameter, set `ENGINE_URL` to the Modal URL and remove `ENGINE_FALLBACK_URL` (without a fallback the gateway never starts the server), wait 5 minutes for the gateway to pick it up, then stop the instance.
