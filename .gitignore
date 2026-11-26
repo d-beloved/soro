@@ -29,3 +29,7 @@ private/
 
 # Submission video (HyperFrames project, kept local)
 videos/
+
+# Lambda bundle and SAM output (gateway/aws)
+gateway/aws/build/
+.aws-sam/

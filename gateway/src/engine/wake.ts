@@ -1,7 +1,8 @@
 import { EC2Client, StartInstancesCommand } from "@aws-sdk/client-ec2";
 
-// Starts the engine's EC2 server, which stops itself after 15 idle minutes (engine/aws/idle-stop.sh). Credentials
-// come from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY: an IAM user allowed only ec2:StartInstances on this server.
+// Starts the engine's EC2 server, which stops itself after 15 idle minutes (engine/aws/idle-stop.sh). On Lambda the
+// function's own role allows it (aws/template.yaml). Elsewhere, set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for an
+// IAM user allowed only ec2:StartInstances on this server.
 
 /** Asking more often than this doesn't start it any sooner. */
 const MIN_GAP_MS = 30_000;

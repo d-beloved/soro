@@ -3,15 +3,20 @@ import type { Deps } from "./pipeline/context.js";
 import { handleMessage } from "./pipeline/handle.js";
 import { KeyedQueue } from "./lib/queue.js";
 import { verifySignature } from "./whatsapp/signature.js";
-import { extractEvents, WebhookPayload } from "./whatsapp/types.js";
+import { extractEvents, type InboundMessage, WebhookPayload } from "./whatsapp/types.js";
 
 interface AppOptions {
   verifyToken: string;
   appSecret: string;
   deps: Deps;
+  /**
+   * Hands a message on to be processed elsewhere, in order per sender (on Lambda: a FIFO queue). Without it the
+   * message is processed in this process, after the ack.
+   */
+  dispatch?: (m: InboundMessage) => Promise<void>;
 }
 
-export function createApp({ verifyToken, appSecret, deps }: AppOptions) {
+export function createApp({ verifyToken, appSecret, deps, dispatch }: AppOptions) {
   const app = new Hono();
   const queue = new KeyedQueue();
 
@@ -46,6 +51,16 @@ export function createApp({ verifyToken, appSecret, deps }: AppOptions) {
     const { messages, statuses } = extractEvents(parsed.data);
     for (const s of statuses) {
       if (s.status === "failed") deps.log.warn({ id: s.id, errors: s.errors }, "outbound message failed");
+    }
+    if (dispatch) {
+      try {
+        await Promise.all(messages.map(dispatch));
+      } catch (err) {
+        // Not acked, so Meta sends it again later.
+        deps.log.error({ err }, "couldn't queue the message");
+        return c.text("try again", 500);
+      }
+      return c.text("ok");
     }
     // Ack immediately (Meta retries if we take too long); process in the background, in order per sender.
     for (const m of messages) {

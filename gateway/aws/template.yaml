@@ -1,0 +1,106 @@
+# The gateway on AWS Lambda (see README.md): a webhook function behind a function URL, a FIFO queue, a worker
+# that runs the pipeline, and a reminder check every minute. Settings and secrets come from one SSM parameter.
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Soro WhatsApp gateway
+
+Parameters:
+  EngineInstanceId:
+    Type: String
+    AllowedPattern: "^i-[0-9a-f]+$"
+    Description: The engine's EC2 instance, which the worker starts when it is stopped.
+  SettingsParameter:
+    Type: String
+    Default: /soro/gateway
+    Description: SecureString parameter holding the gateway's settings, one KEY=value per line.
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    CodeUri: build/
+    LoggingConfig:
+      LogFormat: Text
+      LogGroup: !Ref Logs
+    Environment:
+      Variables:
+        SETTINGS_PARAM: !Ref SettingsParameter
+        QUEUE_URL: !Ref Messages
+        ENGINE_AWS_INSTANCE_ID: !Ref EngineInstanceId
+        ENGINE_AWS_REGION: !Ref AWS::Region
+
+Resources:
+  Logs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /soro/gateway
+      RetentionInDays: 30
+
+  # One sender's messages are handled one at a time, in order. Messages are encrypted at rest and dropped after an hour.
+  Messages:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: soro-messages.fifo
+      FifoQueue: true
+      VisibilityTimeout: 960
+      MessageRetentionPeriod: 3600
+      SqsManagedSseEnabled: true
+
+  Webhook:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.webhook
+      MemorySize: 256
+      Timeout: 10
+      FunctionUrlConfig:
+        AuthType: NONE
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt Messages.QueueName
+        - Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SettingsParameter}"
+
+  Worker:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.worker
+      MemorySize: 512
+      Timeout: 900
+      Events:
+        Queue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt Messages.Arn
+            BatchSize: 1
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SettingsParameter}"
+            - Effect: Allow
+              Action: ec2:StartInstances
+              Resource: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${EngineInstanceId}"
+
+  Nudge:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.nudge
+      MemorySize: 256
+      Timeout: 60
+      Events:
+        EveryMinute:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: rate(1 minute)
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SettingsParameter}"
+
+Outputs:
+  WebhookUrl:
+    Description: Set this, with /webhook at the end, as the callback URL in the Meta app.
+    Value: !GetAtt WebhookUrl.FunctionUrl
