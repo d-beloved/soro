@@ -16,14 +16,10 @@ case "$stay" in
   [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) [[ "$(date -u +%F)" > "$stay" ]] || exit 0 ;;
 esac
 
-# Through the EC2 API, with the instance's role, not `shutdown`: a Spot instance shut down from inside may be
-# terminated instead of stopped.
+# With the instance's shutdown behavior at Stop (the default), this stops it; the disk and models stay.
 stop_server() {
   echo "$1: stopping the server"
-  local id region
-  id=$(curl -fsS --max-time 2 -H "X-aws-ec2-metadata-token: $imds_token" "$imds/meta-data/instance-id")
-  region=$(curl -fsS --max-time 2 -H "X-aws-ec2-metadata-token: $imds_token" "$imds/meta-data/placement/region")
-  aws ec2 stop-instances --region "$region" --instance-ids "$id" --output text >/dev/null
+  shutdown -h now
 }
 
 up_s=$(cut -d. -f1 /proc/uptime)
