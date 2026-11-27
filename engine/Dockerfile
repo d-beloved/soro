@@ -15,7 +15,7 @@ RUN uv venv --python 3.11 /opt/venv
 # torch 2.6 on cu124, matching the CUDA llama.cpp is built against below.
 RUN uv pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
 RUN uv pip install transformers==5.14.1 omnivoice==0.2.1 accelerate "fastapi[standard]" huggingface_hub
-# T4 (75) on g4dn; A10G (86) and L4 (89) in case we move up to g5 or g6. No GPU needed to build, only to import.
+# T4 (75) on g4dn, A10G (86) on g5, L4 (89) on g6. No GPU needed to build, only to import.
 RUN CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=75;86;89" uv pip install llama-cpp-python==0.3.36
 
 # Models live on the host disk, mounted at /models (same layout as Modal's "soro-models" volume).

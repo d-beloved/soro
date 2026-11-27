@@ -10,20 +10,17 @@ People send a voice note or text in English, Pidgin, Yoruba, Hausa or Igbo about
 
 ## How it fits together
 
-![How Sọ̀rọ̀ runs](docs/system.svg)
-
 ```
 WhatsApp user
    │  voice note / text
    ▼
-Meta WhatsApp Cloud API ──webhook──▶ gateway/  (Node 22 + Hono, on AWS Lambda: webhook → SQS FIFO → worker)
-                                      │  consent, routing, commerce, tutor, replies; reminders every minute
-                                      ├──▶ Supabase Postgres (EU)        supabase/
-                                      └──▶ engine/  (FastAPI on an AWS T4 GPU that sleeps when idle, Modal as fallback)
-                                             • ASR: NCAIR Nigerian-accented English, Yoruba, Hausa, Igbo (Whisper-small)
-                                             • LLM: N-ATLaS (Llama-3 8B) as GGUF Q4_K_M via llama.cpp: intent routing, tip adaptation, translation
-                                             • TTS: OmniVoice (Yoruba fine-tune for Yoruba) → Opus voice note
-Landing page, privacy, terms ─────── site/  (static, Cloudflare Pages → soro.charavol.com)
+gateway/   receives messages, asks for consent, keeps the records, sends the replies
+   ├──▶ supabase/   the database
+   └──▶ engine/     the speech and language models
+          • hear: speech to text in English, Yoruba, Hausa, Igbo (NCAIR)
+          • understand: what the message means (N-ATLaS)
+          • speak: the voice-note reply (OmniVoice)
+site/      landing page, privacy notice, terms
 ```
 
 - **Privacy:** phone numbers are stored only as a salted SHA-256 hash. The one exception is a pending reminder, which keeps the number AES-256-GCM encrypted (key only in the gateway) for at most 23 hours. Nothing happens before the user consents (NDPA 2023). Audio is never stored. `DELETE` erases a user and everything they sent, as does the purge of users inactive for 12 months; each leaves only an unlinkable row per message (time, voice or text, language, intent) so usage counts survive.
@@ -87,7 +84,7 @@ node scripts/serve_site.mjs       # http://localhost:4321
 ## Deploy
 
 1. **Supabase** (EU region): in the SQL editor run `supabase/migrations/0001_init.sql`, then `0002_retention.sql`, then `0003_personal_money.sql`, then `0004_service_role_grants.sql`, then `0005_rename_views.sql`, then `0006_anonymise_on_delete.sql`, then `0007_nudge.sql`, then `0008_pending_nudges.sql`, then `supabase/seed/tips.sql`.
-2. **Engine on Modal** (the fallback, and the whole engine if you skip AWS):
+2. **Engine**, on Modal, on your own GPU server, or both:
    ```bash
    cd engine
    uv run --with modal modal token new
@@ -95,9 +92,9 @@ node scripts/serve_site.mjs       # http://localhost:4321
    uv run --with modal modal run modal_app.py::setup_models
    uv run --with modal modal deploy modal_app.py
    ```
-   The deploy prints the engine URL. Containers scale to zero after 5 idle minutes, so the first message after a quiet spell waits for a cold start (about 45s). `modal run modal_app.py::warm --on` keeps one up until the next deploy, e.g. for a demo; `--no-on` lets it sleep again.
-   **Engine on AWS** (main; stops itself when idle and the gateway wakes it, with Modal answering meanwhile): follow [engine/aws/README.md](engine/aws/README.md).
-3. **Gateway on AWS Lambda**, with the Meta webhook pointed at it: follow [gateway/aws/README.md](gateway/aws/README.md). The settings are the variables in `gateway/.env.example` (`ENGINE_URL` set to the AWS engine and `ENGINE_FALLBACK_URL` to the Modal URL, or `ENGINE_URL` to Modal alone; `NUDGE_KEY` from `openssl rand -base64 32`).
+   The deploy prints the engine URL. Containers scale to zero after 5 idle minutes, so the first message after a quiet spell waits for a cold start (about 45s). `modal run modal_app.py::warm --on` keeps one up until the next deploy; `--no-on` lets it sleep again.
+   For a GPU server on AWS that stops itself when idle and is started again by the gateway, follow [engine/aws/README.md](engine/aws/README.md).
+3. **Gateway on AWS Lambda**, with the Meta webhook pointed at it: follow [gateway/aws/README.md](gateway/aws/README.md). The settings are the variables in `gateway/.env.example` (`ENGINE_URL` set to the engine, and optionally `ENGINE_FALLBACK_URL` to a second one used when the first is asleep or fails; `NUDGE_KEY` from `openssl rand -base64 32`).
 4. **Gateway elsewhere** (any Node 22 host): build with `npm ci && npm run build`, start with `npm start`, health check `/health`, the same variables as the environment, plus `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for a user allowed `ec2:StartInstances` on the engine if it should wake the AWS engine. Set the Meta callback URL to `https://<your-gateway>/webhook`, with `WA_VERIFY_TOKEN` as the verify token, subscribed to `messages`.
 5. **Site on Cloudflare Pages:** `npx wrangler pages deploy site --project-name <your-project> --branch main`.
 

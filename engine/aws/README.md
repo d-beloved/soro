@@ -1,14 +1,14 @@
 # Engine on AWS
 
-One GPU server running the engine. It stops itself after 15 idle minutes and the gateway starts it again when a message comes in. Modal answers while it boots, and whenever it fails.
+One GPU server running the engine. It stops itself after 15 idle minutes and the gateway starts it again when a message comes in. If the gateway also has a fallback engine (`ENGINE_FALLBACK_URL`, for example the Modal deployment), that one answers while the server boots or when it fails.
 
 ```
-gateway (Lambda) ──▶ https://engine.soro.charavol.com  (EC2 g4dn.xlarge, T4: Caddy ─▶ engine container)
-     │           └─▶ Modal (fallback: while AWS is asleep or booting, or when it errors or times out)
+gateway ──▶ https://engine.example.com  (EC2 g4dn.xlarge, T4: Caddy ─▶ engine container)
+     │   └─▶ fallback engine, optional (while the server is asleep or booting, or when it errors or times out)
      └─ wakes the server (ec2:StartInstances) when it finds it asleep
 ```
 
-Region is us-east-1 (N. Virginia). The server is an On-Demand instance: it runs only when started and stops only when it stops itself or you stop it.
+Any region with g4dn instances works; the steps below use us-east-1. The server is an On-Demand instance: it runs only when started and stops only when it stops itself or you stop it.
 
 ## Before you start
 
@@ -33,8 +33,8 @@ No Elastic IP: the server gets a new public address each time it starts, and upd
 
 The engine's name gets a Route 53 hosted zone of its own, so the server may change that one record and nothing else in the domain.
 
-1. **Route 53 → Hosted zones → Create hosted zone:** `engine.soro.charavol.com`, public. Note its four name servers (the NS record).
-2. **In the parent domain's DNS** (Cloudflare here), add four **NS** records named `engine.soro`, one per name server. Remove any A record with that name first.
+1. **Route 53 → Hosted zones → Create hosted zone:** `engine.example.com` (your engine's name), public. Note its four name servers (the NS record).
+2. **In the parent domain's DNS** add four **NS** records named `engine`, one per name server. Remove any A record with that name first.
 3. **IAM → Roles → Create role:** trusted entity *AWS service → EC2*, no managed policies, name `soro-engine-dns`. Then add this inline policy, with the hosted zone's ID:
 
 ```json
@@ -48,7 +48,7 @@ The engine's name gets a Route 53 hosted zone of its own, so the server may chan
       "Resource": "arn:aws:route53:::hostedzone/<zone-id>",
       "Condition": {
         "ForAllValues:StringEquals": {
-          "route53:ChangeResourceRecordSetsNormalizedRecordNames": ["engine.soro.charavol.com"],
+          "route53:ChangeResourceRecordSetsNormalizedRecordNames": ["engine.example.com"],
           "route53:ChangeResourceRecordSetsRecordTypes": ["A"]
         }
       }
@@ -72,9 +72,9 @@ git clone https://github.com/d-beloved/soro.git && cd soro/engine/aws
 sudo mkdir -p /opt/soro/models && sudo chown ubuntu /opt/soro/models
 ```
 
-### Models: copy them from Modal (recommended)
+### Models: copy them from Modal
 
-This gives the same files Modal serves, so the voices are exactly the same as before:
+If the engine is already deployed on Modal, this gives the server the same files, so the voices match:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh && source ~/.local/bin/env
@@ -90,7 +90,7 @@ Don't copy the volume with `modal volume get soro-models /` directly: it drops t
 
 ### Or build them from scratch
 
-Needs `HF_TOKEN` with the gated model terms accepted. The Yoruba voice is the model's own and the others come from fixed seeds, but the result can still differ slightly from Modal's. Converting N-ATLaS to GGUF took 32 GB of RAM on Modal, so this may need a `g4dn.2xlarge`.
+Needs `HF_TOKEN` with the gated model terms accepted. The Yoruba voice is the model's own and the others come from fixed seeds, but the result can still differ slightly from a Modal deployment's. Converting N-ATLaS to GGUF needs about 32 GB of RAM, so this may need a `g4dn.2xlarge`.
 
 ```bash
 docker compose build engine
@@ -100,14 +100,14 @@ docker compose run --rm -e HF_TOKEN=hf_xxx -e HF_HUB_OFFLINE=0 engine python -m 
 ## 4. Start it
 
 ```bash
-cp .env.example .env && nano .env      # ENGINE_TOKEN: the same value as in the gateway's settings and the Modal secret
+cp .env.example .env && nano .env      # ENGINE_TOKEN: the same value as in the gateway's settings (and the Modal secret, if you use one)
 sudo cp soro-dns.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now soro-dns
-journalctl -u soro-dns                  # "engine.soro.charavol.com -> <public-ip>"
+journalctl -u soro-dns                  # "engine.example.com -> <public-ip>"
 docker compose up -d --build            # the first build takes 20-30 min (llama.cpp compiles for CUDA)
 docker builder prune -af                # the build cache is about as big as the image
 docker compose logs -f engine           # wait for "Uvicorn running on http://0.0.0.0:8000"
-curl https://engine.soro.charavol.com/health
-curl -s -X POST https://engine.soro.charavol.com/route \
+curl https://engine.example.com/health
+curl -s -X POST https://engine.example.com/route \
   -H "Authorization: Bearer $(grep ENGINE_TOKEN .env | cut -d= -f2)" -H "Content-Type: application/json" \
   -d '{"text":"I sell 3 bags of rice 75k","lang":"en","today":"2026-10-14"}'
 ```
@@ -129,8 +129,8 @@ It shuts the server down (which stops it) once the engine has gone 15 minutes wi
 
 On Lambda ([gateway/aws/README.md](../../gateway/aws/README.md)), set these in the `/soro/gateway` parameter:
 
-- `ENGINE_URL=https://engine.soro.charavol.com`
-- `ENGINE_FALLBACK_URL=` the Modal URL
+- `ENGINE_URL=https://engine.example.com`
+- `ENGINE_FALLBACK_URL=` the fallback engine's URL, if you have one
 
 and deploy with the instance id (`gateway/aws/deploy.sh i-…`). The worker's own role is allowed to start this one server and nothing else, so there is no access key to create.
 
@@ -140,6 +140,6 @@ In the gateway's logs, `engine asleep, starting it and using the fallback` is a 
 
 ## Day to day
 
-- **Update the engine:** `cd ~/soro && git pull && cd engine/aws && docker compose up -d --build engine && docker image prune -f && docker builder prune -af`, while logged in over SSH so the server doesn't stop itself mid-build. Messages fall back to Modal while it restarts. If `soro-idle.service` changed, copy it again and run `sudo systemctl daemon-reload`.
+- **Update the engine:** `cd ~/soro && git pull && cd engine/aws && docker compose up -d --build engine && docker image prune -f && docker builder prune -af`, while logged in over SSH so the server doesn't stop itself mid-build. Messages go to the fallback engine, if there is one, while it restarts. If `soro-idle.service` changed, copy it again and run `sudo systemctl daemon-reload`.
 - **Keep it up:** EC2 → the instance → Tags → Manage tags → add `stay-awake` with `on`, or a date (`2026-12-31`) to stay up through that day (UTC). Remove the tag, or let the date pass, and it sleeps after 15 idle minutes again. If it is asleep when you add the tag, start it (Instance state → Start) or send a message.
-- **Keep it off:** in the `/soro/gateway` parameter, set `ENGINE_URL` to the Modal URL and remove `ENGINE_FALLBACK_URL` (without a fallback the gateway never starts the server), wait 5 minutes for the gateway to pick it up, then stop the instance.
+- **Keep it off:** in the `/soro/gateway` parameter, set `ENGINE_URL` to another engine (such as the Modal URL) and remove `ENGINE_FALLBACK_URL` (without a fallback the gateway never starts the server), wait 5 minutes for the gateway to pick it up, then stop the instance.

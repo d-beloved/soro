@@ -59,7 +59,7 @@ def setup_models(allow_community_gguf: bool = False, redo_voices: bool = False):
 
 @app.cls(
     image=image,
-    # T4 first; L4 when Modal has no T4 (on Oct 9 the container waited ~1 h, 07:55-08:52 WAT, for a T4).
+    # T4 first; L4 when Modal has no T4 free.
     # llama.cpp above is built for both (CUDA archs 75 and 89).
     gpu=["T4", "L4"],
     volumes={MODELS: volume},
@@ -67,9 +67,9 @@ def setup_models(allow_community_gguf: bool = False, redo_voices: bool = False):
     scaledown_window=300,
     # Scale to zero: no GPU bill while idle. The first message after 5 quiet minutes waits for a cold start
     # (~45s, up to 1-2 min; the gateway allows 120s per call and sends its one-moment notice at 10s).
-    # Before a demo, `modal run modal_app.py::warm --on` keeps one up (T4 ~$0.59/h) until the next deploy.
+    # `modal run modal_app.py::warm --on` keeps one up until the next deploy.
     min_containers=0,
-    max_containers=1,  # 1,000-user licence cap + budget: one GPU is plenty for now
+    max_containers=1,  # one GPU is enough under the N-ATLaS licence's 1,000-user cap
     timeout=600,
 )
 @modal.concurrent(max_inputs=8)
@@ -94,6 +94,6 @@ class Engine:
 
 @app.local_entrypoint()
 def warm(on: bool = True):
-    """Manual override until the next deploy, e.g. one warm container for a demo: `modal run modal_app.py::warm --on`."""
+    """Manual override until the next deploy, e.g. one warm container: `modal run modal_app.py::warm --on`."""
     Engine().update_autoscaler(min_containers=1 if on else 0)
     print("warm" if on else "scale-to-zero")
